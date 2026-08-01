@@ -4,15 +4,17 @@ import Security
 
 struct CognitoConfiguration: Equatable {
     let authorizationEndpoint: URL
+    let tokenEndpoint: URL
     let clientID: String
     let redirectURI: String
     let scopes: [String]
 
-    init(authorizationEndpoint: URL, clientID: String, redirectURI: String, scopes: [String] = ["openid", "email"]) throws {
+    init(authorizationEndpoint: URL, tokenEndpoint: URL, clientID: String, redirectURI: String, scopes: [String] = ["openid", "email"]) throws {
         guard !clientID.isEmpty, !redirectURI.isEmpty else {
             throw CognitoOAuthError.invalidConfiguration
         }
         self.authorizationEndpoint = authorizationEndpoint
+        self.tokenEndpoint = tokenEndpoint
         self.clientID = clientID
         self.redirectURI = redirectURI
         self.scopes = scopes
