@@ -24,6 +24,8 @@
 		C10000000000000000000021 /* CognitoWebAuthenticatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000033 /* CognitoWebAuthenticatorTests.swift */; };
 		C10000000000000000000022 /* CognitoTokenClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000034 /* CognitoTokenClient.swift */; };
 		C10000000000000000000023 /* CognitoTokenClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000035 /* CognitoTokenClientTests.swift */; };
+		C10000000000000000000024 /* CognitoSignInCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000036 /* CognitoSignInCoordinator.swift */; };
+		C10000000000000000000025 /* CognitoSignInCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000037 /* CognitoSignInCoordinatorTests.swift */; };
 		A10000000000000000000015 /* SyncStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* SyncStateTests.swift */; };
 		A10000000000000000000018 /* DashboardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* DashboardViewModelTests.swift */; };
 /* End PBXBuildFile section */
@@ -49,6 +51,8 @@
 		B10000000000000000000033 /* CognitoWebAuthenticatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitoWebAuthenticatorTests.swift; sourceTree = "<group>"; };
 		B10000000000000000000034 /* CognitoTokenClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitoTokenClient.swift; sourceTree = "<group>"; };
 		B10000000000000000000035 /* CognitoTokenClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitoTokenClientTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000036 /* CognitoSignInCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitoSignInCoordinator.swift; sourceTree = "<group>"; };
+		B10000000000000000000037 /* CognitoSignInCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitoSignInCoordinatorTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000026 /* FloatingBrainTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FloatingBrainTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000027 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -60,9 +64,9 @@
 
 /* Begin PBXGroup section */
 		A10000000000000000000040 = {isa = PBXGroup; children = (A10000000000000000000041, A10000000000000000000042, A10000000000000000000043, A10000000000000000000044, A10000000000000000000045, A10000000000000000000027, A10000000000000000000046); sourceTree = "<group>"; };
-		A10000000000000000000041 /* FloatingBrain */ = {isa = PBXGroup; children = (A10000000000000000000021, A10000000000000000000022, A10000000000000000000023, A10000000000000000000024, A10000000000000000000028, A10000000000000000000029, A1000000000000000000002B, A1000000000000000000002D, A1000000000000000000002E, B10000000000000000000030, B10000000000000000000032, B10000000000000000000034); path = FloatingBrain; sourceTree = "<group>"; };
+		A10000000000000000000041 /* FloatingBrain */ = {isa = PBXGroup; children = (A10000000000000000000021, A10000000000000000000022, A10000000000000000000023, A10000000000000000000024, A10000000000000000000028, A10000000000000000000029, A1000000000000000000002B, A1000000000000000000002D, A1000000000000000000002E, B10000000000000000000030, B10000000000000000000032, B10000000000000000000034, B10000000000000000000036); path = FloatingBrain; sourceTree = "<group>"; };
 		A10000000000000000000042 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000020, A10000000000000000000026); name = Products; sourceTree = "<group>"; };
-		A10000000000000000000043 /* FloatingBrainTests */ = {isa = PBXGroup; children = (A10000000000000000000025, A1000000000000000000002A, A1000000000000000000002C, A1000000000000000000002F, B10000000000000000000031, B10000000000000000000033, B10000000000000000000035); path = FloatingBrainTests; sourceTree = "<group>"; };
+		A10000000000000000000043 /* FloatingBrainTests */ = {isa = PBXGroup; children = (A10000000000000000000025, A1000000000000000000002A, A1000000000000000000002C, A1000000000000000000002F, B10000000000000000000031, B10000000000000000000033, B10000000000000000000035, B10000000000000000000037); path = FloatingBrainTests; sourceTree = "<group>"; };
 		A10000000000000000000044 = {isa = PBXGroup; children = (); name = Frameworks; sourceTree = "<group>"; };
 		A10000000000000000000045 = {isa = PBXVariantGroup; children = (); name = "Supporting Files"; sourceTree = "<group>"; };
 		A10000000000000000000046 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -82,8 +86,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000000000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000016, A10000000000000000000017, A10000000000000000000019, A1000000000000000000001B, A1000000000000000000001C, A1000000000000000000001E, C10000000000000000000020, C10000000000000000000022); runOnlyForDeploymentPostprocessing = 0; };
-		A10000000000000000000072 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000015, A10000000000000000000018, A1000000000000000000001A, A1000000000000000000001D, A1000000000000000000001F, C10000000000000000000021, C10000000000000000000023); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000016, A10000000000000000000017, A10000000000000000000019, A1000000000000000000001B, A1000000000000000000001C, A1000000000000000000001E, C10000000000000000000020, C10000000000000000000022, C10000000000000000000024); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000072 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000015, A10000000000000000000018, A1000000000000000000001A, A1000000000000000000001D, A1000000000000000000001F, C10000000000000000000021, C10000000000000000000023, C10000000000000000000025); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
