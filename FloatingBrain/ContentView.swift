@@ -50,6 +50,11 @@ struct ContentView: View {
                     .font(.footnote)
                     .foregroundStyle(.red)
             }
+            if let authenticationError = viewModel.authenticationError {
+                Text(authenticationError)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
         }
         .padding(18)
         .background(.background, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
@@ -88,8 +93,16 @@ struct ContentView: View {
     }
 
     private var accountActions: some View {
-        Button("Sign Out", role: .destructive) {
-            viewModel.signOut()
+        Group {
+            if viewModel.state.authentication == .signedIn {
+                Button("Sign Out", role: .destructive) {
+                    viewModel.signOut()
+                }
+            } else {
+                Button("Sign In") {
+                    Task { await viewModel.signIn() }
+                }
+            }
         }
         .frame(maxWidth: .infinity)
         .buttonStyle(.bordered)

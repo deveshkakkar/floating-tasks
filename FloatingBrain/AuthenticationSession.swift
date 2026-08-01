@@ -5,6 +5,16 @@ enum AuthenticationState: Equatable {
     case signedIn
 }
 
+protocol SignInService {
+    func signIn() async throws -> AuthTokens
+}
+
+struct UnconfiguredSignInService: SignInService {
+    func signIn() async throws -> AuthTokens {
+        throw CognitoOAuthError.invalidConfiguration
+    }
+}
+
 protocol AuthenticationSession {
     var state: AuthenticationState { get }
     func restore() throws -> AuthenticationState

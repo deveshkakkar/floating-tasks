@@ -6,18 +6,22 @@ final class DashboardViewModel: ObservableObject {
     @Published private(set) var state: SyncState
     @Published private(set) var isLoadingReminders = false
     @Published private(set) var reminderError: String?
+    @Published private(set) var authenticationError: String?
 
     private let reminderService: any ReminderAccessService
     private let syncService: any ReminderSyncService
+    private let signInService: any SignInService
 
     init(
         state: SyncState = SyncState(),
         reminderService: any ReminderAccessService = EventKitReminderAccessService(),
-        syncService: any ReminderSyncService = UnconfiguredReminderSyncService()
+        syncService: any ReminderSyncService = UnconfiguredReminderSyncService(),
+        signInService: any SignInService = UnconfiguredSignInService()
     ) {
         self.state = state
         self.reminderService = reminderService
         self.syncService = syncService
+        self.signInService = signInService
     }
 
     func refreshReminderStatus() async {
@@ -58,6 +62,16 @@ final class DashboardViewModel: ObservableObject {
 
     func syncNow() async {
         state.result = await syncService.sync()
+    }
+
+    func signIn() async {
+        authenticationError = nil
+        do {
+            _ = try await signInService.signIn()
+            state.authentication = .signedIn
+        } catch {
+            authenticationError = error.localizedDescription
+        }
     }
 
     func signOut() {
