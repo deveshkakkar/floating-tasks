@@ -25,4 +25,16 @@ final class ReminderSyncAPIClientTests: XCTestCase {
             XCTAssertEqual(error as? ReminderSyncAPIError, .missingAccessToken)
         }
     }
+
+    func testRetryPolicyRetriesTransientFailuresOnly() {
+        let policy = SyncRetryPolicy(maxAttempts: 3, baseDelayNanoseconds: 10)
+
+        XCTAssertTrue(ReminderSyncAPIError.serverError(statusCode: 503).isRetryable)
+        XCTAssertTrue(ReminderSyncAPIError.serverError(statusCode: 429).isRetryable)
+        XCTAssertTrue(ReminderSyncAPIError.transport("offline").isRetryable)
+        XCTAssertFalse(ReminderSyncAPIError.serverError(statusCode: 400).isRetryable)
+        XCTAssertFalse(ReminderSyncAPIError.missingAccessToken.isRetryable)
+        XCTAssertEqual(policy.delay(forRetryNumber: 1), 0)
+        XCTAssertEqual(policy.delay(forRetryNumber: 2), 10)
+    }
 }
