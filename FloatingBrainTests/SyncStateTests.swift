@@ -25,7 +25,7 @@ final class SyncStateTests: XCTestCase {
     }
 
     func testUnconfiguredServiceReturnsActionableFailure() async {
-        let result = await UnconfiguredReminderSyncService().sync()
+        let result = await UnconfiguredReminderSyncService().sync(reminders: [], listName: "Floating Brain")
 
         XCTAssertEqual(result, .failed(message: "Sync is not configured yet."))
     }

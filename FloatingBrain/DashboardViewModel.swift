@@ -61,7 +61,21 @@ final class DashboardViewModel: ObservableObject {
     }
 
     func syncNow() async {
-        state.result = await syncService.sync()
+        guard state.remindersPermission == .authorized else {
+            state.result = .failed(message: "Allow Reminders access before syncing.")
+            return
+        }
+        guard state.authentication == .signedIn else {
+            state.result = .failed(message: "Sign in before syncing.")
+            return
+        }
+
+        do {
+            let reminders = try await reminderService.readFloatingBrainReminders()
+            state.result = await syncService.sync(reminders: reminders, listName: "Floating Brain")
+        } catch {
+            state.result = .failed(message: error.localizedDescription)
+        }
     }
 
     func signIn() async {
