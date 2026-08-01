@@ -1,0 +1,91 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000011 /* FloatingBrainApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000021 /* FloatingBrainApp.swift */; };
+		A10000000000000000000012 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000022 /* ContentView.swift */; };
+		A10000000000000000000013 /* SyncState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000023 /* SyncState.swift */; };
+		A10000000000000000000014 /* ReminderSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* ReminderSyncService.swift */; };
+		A10000000000000000000016 /* ReminderAccessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ReminderAccessService.swift */; };
+		A10000000000000000000017 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000029 /* DashboardViewModel.swift */; };
+		A10000000000000000000015 /* SyncStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* SyncStateTests.swift */; };
+		A10000000000000000000018 /* DashboardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* DashboardViewModelTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000020 /* FloatingBrain.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FloatingBrain.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000021 /* FloatingBrainApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingBrainApp.swift; sourceTree = "<group>"; };
+		A10000000000000000000022 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A10000000000000000000023 /* SyncState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncState.swift; sourceTree = "<group>"; };
+		A10000000000000000000024 /* ReminderSyncService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderSyncService.swift; sourceTree = "<group>"; };
+		A10000000000000000000025 /* SyncStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncStateTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000028 /* ReminderAccessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderAccessService.swift; sourceTree = "<group>"; };
+		A10000000000000000000029 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
+		A1000000000000000000002A /* DashboardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModelTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000026 /* FloatingBrainTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FloatingBrainTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000027 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000030 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000031 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000000000000000000040 = {isa = PBXGroup; children = (A10000000000000000000041, A10000000000000000000042, A10000000000000000000043, A10000000000000000000044, A10000000000000000000045, A10000000000000000000027, A10000000000000000000046); sourceTree = "<group>"; };
+		A10000000000000000000041 /* FloatingBrain */ = {isa = PBXGroup; children = (A10000000000000000000021, A10000000000000000000022, A10000000000000000000023, A10000000000000000000024, A10000000000000000000028, A10000000000000000000029); path = FloatingBrain; sourceTree = "<group>"; };
+		A10000000000000000000042 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000020, A10000000000000000000026); name = Products; sourceTree = "<group>"; };
+		A10000000000000000000043 /* FloatingBrainTests */ = {isa = PBXGroup; children = (A10000000000000000000025, A1000000000000000000002A); path = FloatingBrainTests; sourceTree = "<group>"; };
+		A10000000000000000000044 = {isa = PBXGroup; children = (); name = Frameworks; sourceTree = "<group>"; };
+		A10000000000000000000045 = {isa = PBXVariantGroup; children = (); name = "Supporting Files"; sourceTree = "<group>"; };
+		A10000000000000000000046 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000000000000000000050 /* FloatingBrain */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000060; buildPhases = (A10000000000000000000070, A10000000000000000000030, A10000000000000000000071); buildRules = (); dependencies = (); name = FloatingBrain; productName = FloatingBrain; productReference = A10000000000000000000020; productType = "com.apple.product-type.application"; };
+		A10000000000000000000051 /* FloatingBrainTests */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000061; buildPhases = (A10000000000000000000072, A10000000000000000000031); buildRules = (); dependencies = (A10000000000000000000080); name = FloatingBrainTests; productName = FloatingBrainTests; productReference = A10000000000000000000026; productType = "com.apple.product-type.bundle.unit-test"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000000000000000000090 /* Project object */ = {isa = PBXProject; attributes = {LastUpgradeCheck = 1620; TargetAttributes = {A10000000000000000000050 = {CreatedOnToolsVersion = 16.2;}; A10000000000000000000051 = {CreatedOnToolsVersion = 16.2; TestTargetID = A10000000000000000000050;};};}; buildConfigurationList = A10000000000000000000062; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base); mainGroup = A10000000000000000000040; productRefGroup = A10000000000000000000042; projectDirPath = ""; projectRoot = ""; targets = (A10000000000000000000050, A10000000000000000000051); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000071 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000016, A10000000000000000000017); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000072 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000015, A10000000000000000000018); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A10000000000000000000080 = {isa = PBXTargetDependency; target = A10000000000000000000050; targetProxy = A10000000000000000000081; };
+/* End PBXTargetDependency section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000000000000000000081 = {isa = PBXContainerItemProxy; containerPortal = A10000000000000000000090; proxyType = 1; remoteGlobalIDString = A10000000000000000000050; remoteInfo = FloatingBrain; };
+/* End PBXContainerItemProxy section */
+
+/* Begin XCBuildConfiguration section */
+		A100000000000000000000A0 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = FloatingBrain/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; PRODUCT_BUNDLE_IDENTIFIER = com.floatingbrain.app; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1"; }; name = Debug; };
+		A100000000000000000000A1 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = FloatingBrain/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks"; PRODUCT_BUNDLE_IDENTIFIER = com.floatingbrain.app; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1"; }; name = Release; };
+		A100000000000000000000A2 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.floatingbrain.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FloatingBrain.app/FloatingBrain"; TARGETED_DEVICE_FAMILY = "1"; }; name = Debug; };
+		A100000000000000000000A3 = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; GENERATE_INFOPLIST_FILE = YES; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.floatingbrain.tests; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/FloatingBrain.app/FloatingBrain"; TARGETED_DEVICE_FAMILY = "1"; }; name = Release; };
+		A100000000000000000000A4 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; SWIFT_VERSION = 5.0; }; name = Release; };
+		A100000000000000000000A5 = {isa = XCBuildConfiguration; buildSettings = {CODE_SIGN_STYLE = Automatic; DEVELOPMENT_TEAM = ""; SWIFT_VERSION = 5.0; }; name = Debug; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000000000000000000060 = {isa = XCConfigurationList; buildConfigurations = (A100000000000000000000A0, A100000000000000000000A1); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000061 = {isa = XCConfigurationList; buildConfigurations = (A100000000000000000000A2, A100000000000000000000A3); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000062 = {isa = XCConfigurationList; buildConfigurations = (A100000000000000000000A5, A100000000000000000000A4); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000000000000000000090 /* Project object */;
+}
