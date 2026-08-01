@@ -48,4 +48,6 @@ private final class MockReminderAccessService: ReminderAccessService {
         guard let snapshot else { throw ReminderAccessError.listNotFound }
         return snapshot
     }
+
+    func readFloatingBrainReminders() async throws -> [SyncReminder] { [] }
 }

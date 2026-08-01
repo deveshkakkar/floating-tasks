@@ -28,6 +28,7 @@ protocol ReminderAccessService {
     func authorizationStatus() -> PermissionStatus
     func requestAccess() async throws -> Bool
     func readFloatingBrainList() async throws -> ReminderListSnapshot
+    func readFloatingBrainReminders() async throws -> [SyncReminder]
 }
 
 final class EventKitReminderAccessService: ReminderAccessService {
@@ -56,6 +57,13 @@ final class EventKitReminderAccessService: ReminderAccessService {
     }
 
     func readFloatingBrainList() async throws -> ReminderListSnapshot {
+        let reminders = try await readFloatingBrainReminders()
+        let activeCount = reminders.filter { !$0.completed }.count
+        let completedCount = reminders.filter(\.completed).count
+        return ReminderListSnapshot(listName: listName, activeCount: activeCount, completedCount: completedCount)
+    }
+
+    func readFloatingBrainReminders() async throws -> [SyncReminder] {
         guard authorizationStatus() == .authorized else {
             throw ReminderAccessError.permissionDenied
         }
@@ -65,9 +73,7 @@ final class EventKitReminderAccessService: ReminderAccessService {
         }
 
         let reminders = try await fetchReminders(matching: eventStore.predicateForReminders(in: [list]))
-        let activeCount = reminders.filter { !$0.isCompleted }.count
-        let completedCount = reminders.filter(\.isCompleted).count
-        return ReminderListSnapshot(listName: list.title, activeCount: activeCount, completedCount: completedCount)
+        return reminders.compactMap(SyncReminder.init)
     }
 
     private func fetchReminders(matching predicate: NSPredicate) async throws -> [EKReminder] {
@@ -77,4 +83,28 @@ final class EventKitReminderAccessService: ReminderAccessService {
             }
         }
     }
+}
+
+private extension SyncReminder {
+    init?(eventKitReminder: EKReminder) {
+        guard let externalID = eventKitReminder.calendarItemIdentifier.nilIfEmpty,
+              let text = eventKitReminder.title?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !text.isEmpty else {
+            return nil
+        }
+
+        self.init(
+            externalID: externalID,
+            text: text,
+            completed: eventKitReminder.isCompleted,
+            createdAt: eventKitReminder.creationDate,
+            modifiedAt: eventKitReminder.lastModifiedDate,
+            dueAt: eventKitReminder.dueDateComponents?.date,
+            priority: eventKitReminder.priority
+        )
+    }
+}
+
+private extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }

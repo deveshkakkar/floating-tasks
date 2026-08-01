@@ -13,6 +13,13 @@
 		A10000000000000000000014 /* ReminderSyncService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* ReminderSyncService.swift */; };
 		A10000000000000000000016 /* ReminderAccessService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ReminderAccessService.swift */; };
 		A10000000000000000000017 /* DashboardViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000029 /* DashboardViewModel.swift */; };
+		A10000000000000000000019 /* SyncModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002B /* SyncModels.swift */; };
+		A1000000000000000000001A /* SyncModelsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002C /* SyncModelsTests.swift */; };
+		A1000000000000000000001B /* KeychainTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002D /* KeychainTokenStore.swift */; };
+		A1000000000000000000001C /* AuthenticationSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002E /* AuthenticationSession.swift */; };
+		A1000000000000000000001D /* KeychainTokenStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002F /* KeychainTokenStoreTests.swift */; };
+		A1000000000000000000001E /* CognitoOAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000030 /* CognitoOAuth.swift */; };
+		A1000000000000000000001F /* CognitoOAuthTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10000000000000000000031 /* CognitoOAuthTests.swift */; };
 		A10000000000000000000015 /* SyncStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000025 /* SyncStateTests.swift */; };
 		A10000000000000000000018 /* DashboardViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* DashboardViewModelTests.swift */; };
 /* End PBXBuildFile section */
@@ -27,6 +34,13 @@
 		A10000000000000000000028 /* ReminderAccessService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderAccessService.swift; sourceTree = "<group>"; };
 		A10000000000000000000029 /* DashboardViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModel.swift; sourceTree = "<group>"; };
 		A1000000000000000000002A /* DashboardViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardViewModelTests.swift; sourceTree = "<group>"; };
+		A1000000000000000000002B /* SyncModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncModels.swift; sourceTree = "<group>"; };
+		A1000000000000000000002C /* SyncModelsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyncModelsTests.swift; sourceTree = "<group>"; };
+		A1000000000000000000002D /* KeychainTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStore.swift; sourceTree = "<group>"; };
+		A1000000000000000000002E /* AuthenticationSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationSession.swift; sourceTree = "<group>"; };
+		A1000000000000000000002F /* KeychainTokenStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTokenStoreTests.swift; sourceTree = "<group>"; };
+		B10000000000000000000030 /* CognitoOAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitoOAuth.swift; sourceTree = "<group>"; };
+		B10000000000000000000031 /* CognitoOAuthTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CognitoOAuthTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000026 /* FloatingBrainTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FloatingBrainTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000027 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -38,9 +52,9 @@
 
 /* Begin PBXGroup section */
 		A10000000000000000000040 = {isa = PBXGroup; children = (A10000000000000000000041, A10000000000000000000042, A10000000000000000000043, A10000000000000000000044, A10000000000000000000045, A10000000000000000000027, A10000000000000000000046); sourceTree = "<group>"; };
-		A10000000000000000000041 /* FloatingBrain */ = {isa = PBXGroup; children = (A10000000000000000000021, A10000000000000000000022, A10000000000000000000023, A10000000000000000000024, A10000000000000000000028, A10000000000000000000029); path = FloatingBrain; sourceTree = "<group>"; };
+		A10000000000000000000041 /* FloatingBrain */ = {isa = PBXGroup; children = (A10000000000000000000021, A10000000000000000000022, A10000000000000000000023, A10000000000000000000024, A10000000000000000000028, A10000000000000000000029, A1000000000000000000002B, A1000000000000000000002D, A1000000000000000000002E, B10000000000000000000030); path = FloatingBrain; sourceTree = "<group>"; };
 		A10000000000000000000042 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000020, A10000000000000000000026); name = Products; sourceTree = "<group>"; };
-		A10000000000000000000043 /* FloatingBrainTests */ = {isa = PBXGroup; children = (A10000000000000000000025, A1000000000000000000002A); path = FloatingBrainTests; sourceTree = "<group>"; };
+		A10000000000000000000043 /* FloatingBrainTests */ = {isa = PBXGroup; children = (A10000000000000000000025, A1000000000000000000002A, A1000000000000000000002C, A1000000000000000000002F, B10000000000000000000031); path = FloatingBrainTests; sourceTree = "<group>"; };
 		A10000000000000000000044 = {isa = PBXGroup; children = (); name = Frameworks; sourceTree = "<group>"; };
 		A10000000000000000000045 = {isa = PBXVariantGroup; children = (); name = "Supporting Files"; sourceTree = "<group>"; };
 		A10000000000000000000046 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -60,8 +74,8 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000000000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000016, A10000000000000000000017); runOnlyForDeploymentPostprocessing = 0; };
-		A10000000000000000000072 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000015, A10000000000000000000018); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000070 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000016, A10000000000000000000017, A10000000000000000000019, A1000000000000000000001B, A1000000000000000000001C, A1000000000000000000001E); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000072 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000015, A10000000000000000000018, A1000000000000000000001A, A1000000000000000000001D, A1000000000000000000001F); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
