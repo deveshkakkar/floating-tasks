@@ -93,6 +93,7 @@ Resources:
               issuer: !Sub https://cognito-idp.${AWS::Region}.amazonaws.com/${FloatingBrainUserPool}
               audience:
                 - !Ref FloatingBrainUserPoolClient
+            IdentitySource: "$request.header.Authorization"
 
   SyncFunction:
     Type: AWS::Serverless::Function
