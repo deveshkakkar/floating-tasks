@@ -2,6 +2,8 @@
 
 This module contains the local selection/cache behavior for the Raspberry Pi. It deliberately depends on a `ReminderSource` protocol rather than AWS SDK code so credential retrieval and DynamoDB access can be added without changing daily-selection behavior.
 
+`aws_reader.py` provides the read-only DynamoDB adapter. Construct it with temporary-credential-backed boto3 client credentials supplied by the device runtime; do not put IAM access keys in the Pi repository.
+
 The selector:
 
 - stores the same selection for the local calendar day;
