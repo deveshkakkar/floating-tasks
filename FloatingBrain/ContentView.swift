@@ -25,6 +25,9 @@ struct ContentView: View {
             .navigationTitle("Floating Brain")
             .task {
                 await viewModel.refreshReminderStatus()
+                await SyncIntentHandler.shared.register {
+                    await viewModel.syncNow()
+                }
             }
         }
     }
