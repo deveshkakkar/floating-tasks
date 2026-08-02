@@ -66,7 +66,12 @@ def main() -> int:
             print(f"ERROR: {error}")
         return 1
 
-    actual_account = current_aws_account()
+    try:
+        actual_account = current_aws_account()
+    except (OSError, subprocess.CalledProcessError) as error:
+        detail = getattr(error, "stderr", "") or str(error)
+        print(f"ERROR: AWS identity lookup failed: {detail.strip()}")
+        return 1
     if actual_account != args.account_id:
         print(f"ERROR: active AWS account is {actual_account}, expected {args.account_id}")
         return 1
