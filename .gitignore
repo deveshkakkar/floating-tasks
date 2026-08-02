@@ -5,3 +5,6 @@ DerivedData/
 xcuserdata/
 .omx/
 .DS_Store
+.aws-sam/
+samconfig.toml
+__pycache__/
