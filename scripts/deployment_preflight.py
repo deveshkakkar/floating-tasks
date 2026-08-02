@@ -35,6 +35,20 @@ def current_aws_account() -> str:
     return result.stdout.strip()
 
 
+def cli_error(tool: str) -> str | None:
+    executable = shutil.which(tool)
+    if executable is None:
+        return f"required tool not found: {tool}"
+    try:
+        result = subprocess.run([tool, "--version"], capture_output=True, text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError) as error:
+        return f"unable to run {tool}: {error}"
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout).strip().splitlines()[0] if (result.stderr or result.stdout) else "unknown error"
+        return f"{tool} is not functional: {detail}"
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate Floating Brain deployment prerequisites.")
     parser.add_argument("--account-id", required=True)
@@ -44,8 +58,8 @@ def main() -> int:
     errors = validate_parameters(args.account_id, args.domain_prefix)
     errors.extend(f"missing {path}" for path in REQUIRED_FILES if not path.exists())
     for tool in ("aws", "sam"):
-        if shutil.which(tool) is None:
-            errors.append(f"required tool not found: {tool}")
+        if error := cli_error(tool):
+            errors.append(error)
 
     if errors:
         for error in errors:
