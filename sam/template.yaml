@@ -116,7 +116,7 @@ Resources:
           Type: HttpApi
           Properties:
             ApiId: !Ref FloatingBrainHttpApi
-            Path: /v1/reminders/sync
+            Path: /reminders/sync
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
