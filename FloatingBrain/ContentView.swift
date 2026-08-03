@@ -24,6 +24,16 @@ struct ContentView: View {
             .scrollIndicators(.hidden)
             .background(Color(red: 0.95, green: 0.95, blue: 0.97).ignoresSafeArea())
             .navigationTitle("Floating Brain")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        DebugInfoView(viewModel: viewModel)
+                    } label: {
+                        Image(systemName: "ladybug.fill")
+                    }
+                    .accessibilityLabel("Open diagnostics")
+                }
+            }
             .task {
                 await viewModel.refreshReminderStatus()
                 await SyncIntentHandler.shared.register {
