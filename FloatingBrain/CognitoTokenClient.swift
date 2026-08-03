@@ -21,6 +21,20 @@ struct CognitoTokenRequestBuilder {
         return request
     }
 
+    func buildRefreshTokenRequest(refreshToken: String) throws -> URLRequest {
+        guard !refreshToken.isEmpty else { throw CognitoTokenClientError.invalidResponse }
+
+        var request = URLRequest(url: configuration.tokenEndpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+        request.httpBody = formEncoded([
+            ("grant_type", "refresh_token"),
+            ("client_id", configuration.clientID),
+            ("refresh_token", refreshToken)
+        ]).data(using: .utf8)
+        return request
+    }
+
     private func formEncoded(_ values: [(String, String)]) -> String {
         values.map { "\($0.0.urlFormEncoded)=\($0.1.urlFormEncoded)" }.joined(separator: "&")
     }
@@ -78,7 +92,41 @@ struct CognitoTokenClient {
             throw CognitoTokenClientError.transport(error.localizedDescription)
         }
     }
+
+    func refreshAccessToken(using refreshToken: String) async throws -> AuthTokens {
+        let request = try CognitoTokenRequestBuilder(configuration: configuration).buildRefreshTokenRequest(refreshToken: refreshToken)
+
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw CognitoTokenClientError.invalidResponse
+            }
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw CognitoTokenClientError.serverError(statusCode: httpResponse.statusCode)
+            }
+
+            let tokenResponse = try JSONDecoder().decode(CognitoTokenResponse.self, from: data)
+            let tokens = try AuthTokens(
+                accessToken: tokenResponse.accessToken,
+                refreshToken: tokenResponse.refreshToken ?? refreshToken
+            )
+            try tokenStore.save(tokens)
+            return tokens
+        } catch let error as CognitoTokenClientError {
+            throw error
+        } catch let error as KeychainTokenStoreError {
+            throw error
+        } catch {
+            throw CognitoTokenClientError.transport(error.localizedDescription)
+        }
+    }
 }
+
+protocol CognitoTokenRefreshing {
+    func refreshAccessToken(using refreshToken: String) async throws -> AuthTokens
+}
+
+extension CognitoTokenClient: CognitoTokenRefreshing {}
 
 private struct CognitoTokenResponse: Decodable {
     let accessToken: String

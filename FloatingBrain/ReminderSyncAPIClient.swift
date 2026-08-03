@@ -65,12 +65,14 @@ struct SyncRetryPolicy: Equatable {
 struct ReminderSyncAPIClient: ReminderSyncService {
     let baseURL: URL
     let tokenStore: any TokenStore
+    let tokenRefresher: (any CognitoTokenRefreshing)?
     let session: URLSession
     let retryPolicy: SyncRetryPolicy
 
-    init(baseURL: URL, tokenStore: any TokenStore, session: URLSession = .shared, retryPolicy: SyncRetryPolicy = SyncRetryPolicy()) {
+    init(baseURL: URL, tokenStore: any TokenStore, tokenRefresher: (any CognitoTokenRefreshing)? = nil, session: URLSession = .shared, retryPolicy: SyncRetryPolicy = SyncRetryPolicy()) {
         self.baseURL = baseURL
         self.tokenStore = tokenStore
+        self.tokenRefresher = tokenRefresher
         self.session = session
         self.retryPolicy = retryPolicy
     }
@@ -80,13 +82,15 @@ struct ReminderSyncAPIClient: ReminderSyncService {
             guard let tokens = try tokenStore.load() else {
                 throw ReminderSyncAPIError.missingAccessToken
             }
-            let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).build(
-                reminders: reminders,
-                listName: listName,
-                accessToken: tokens.accessToken
-            )
+            var accessToken = tokens.accessToken
+            var didRefreshToken = false
             for attempt in 1...retryPolicy.maxAttempts {
                 do {
+                    let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).build(
+                        reminders: reminders,
+                        listName: listName,
+                        accessToken: accessToken
+                    )
                     let (_, response) = try await session.data(for: request)
                     guard let httpResponse = response as? HTTPURLResponse else {
                         throw ReminderSyncAPIError.invalidResponse
@@ -96,6 +100,15 @@ struct ReminderSyncAPIClient: ReminderSyncService {
                     }
                     return .succeeded(date: Date())
                 } catch let error as ReminderSyncAPIError {
+                    if case .serverError(401) = error,
+                       !didRefreshToken,
+                       let refreshToken = tokens.refreshToken,
+                       let tokenRefresher {
+                        let refreshedTokens = try await tokenRefresher.refreshAccessToken(using: refreshToken)
+                        accessToken = refreshedTokens.accessToken
+                        didRefreshToken = true
+                        continue
+                    }
                     guard error.isRetryable, attempt < retryPolicy.maxAttempts else { throw error }
                     try? await Task.sleep(nanoseconds: retryPolicy.delay(forRetryNumber: attempt))
                 } catch {

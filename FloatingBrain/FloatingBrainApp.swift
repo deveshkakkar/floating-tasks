@@ -29,7 +29,8 @@ struct FloatingBrainApp: App {
             )
             let syncService: any ReminderSyncService = ReminderSyncAPIClient(
                 baseURL: FloatingBrainEnvironment.syncAPIBaseURL,
-                tokenStore: tokenStore
+                tokenStore: tokenStore,
+                tokenRefresher: tokenClient
             )
             _viewModel = StateObject(wrappedValue: DashboardViewModel(
                 state: initialState,
