@@ -11,17 +11,20 @@ final class DashboardViewModel: ObservableObject {
     private let reminderService: any ReminderAccessService
     private let syncService: any ReminderSyncService
     private let signInService: any SignInService
+    private let authenticationSession: (any AuthenticationSession)?
 
     init(
         state: SyncState = SyncState(),
         reminderService: any ReminderAccessService = EventKitReminderAccessService(),
         syncService: any ReminderSyncService = UnconfiguredReminderSyncService(),
-        signInService: any SignInService = UnconfiguredSignInService()
+        signInService: any SignInService = UnconfiguredSignInService(),
+        authenticationSession: (any AuthenticationSession)? = nil
     ) {
         self.state = state
         self.reminderService = reminderService
         self.syncService = syncService
         self.signInService = signInService
+        self.authenticationSession = authenticationSession
     }
 
     func refreshReminderStatus() async {
@@ -89,6 +92,7 @@ final class DashboardViewModel: ObservableObject {
     }
 
     func signOut() {
+        try? authenticationSession?.signOut()
         state.authentication = .signedOut
     }
 }
