@@ -47,6 +47,7 @@ struct FloatingBrainApp: App {
             ContentView(viewModel: viewModel)
         }
         .backgroundTask(.appRefresh(BackgroundSyncScheduler.identifier)) {
+            await viewModel.refreshReminderStatus()
             await viewModel.syncNow()
             BackgroundSyncScheduler.schedule()
         }
