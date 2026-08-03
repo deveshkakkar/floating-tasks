@@ -5,6 +5,7 @@ import Foundation
 final class DashboardViewModel: ObservableObject {
     @Published private(set) var state: SyncState
     @Published private(set) var isLoadingReminders = false
+    @Published private(set) var isSyncing = false
     @Published private(set) var reminderError: String?
     @Published private(set) var authenticationError: String?
 
@@ -49,6 +50,7 @@ final class DashboardViewModel: ObservableObject {
 
     func loadReminderList() async {
         guard state.remindersPermission == .authorized else { return }
+        guard !isLoadingReminders else { return }
         isLoadingReminders = true
         reminderError = nil
         defer { isLoadingReminders = false }
@@ -64,6 +66,7 @@ final class DashboardViewModel: ObservableObject {
     }
 
     func syncNow() async {
+        guard !isSyncing else { return }
         guard state.remindersPermission == .authorized else {
             state.result = .failed(message: "Allow Reminders access before syncing.")
             return
@@ -72,6 +75,9 @@ final class DashboardViewModel: ObservableObject {
             state.result = .failed(message: "Sign in before syncing.")
             return
         }
+
+        isSyncing = true
+        defer { isSyncing = false }
 
         do {
             let reminders = try await reminderService.readFloatingBrainReminders()
