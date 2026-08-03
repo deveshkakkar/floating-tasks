@@ -48,5 +48,16 @@ class MissingRecordTests(unittest.TestCase):
         self.assertEqual(updates, [])
 
 
+class RequestParsingTests(unittest.TestCase):
+    def test_completed_items_are_removed_from_sync_payload(self):
+        payload = APP.parse_request({
+            "body": '{"syncId":"s1","listName":"Floating Brain","items":['
+            '{"externalId":"active","text":"Keep","completed":false},'
+            '{"externalId":"done","text":"Done","completed":true}]}'
+        })
+
+        self.assertEqual([item["externalId"] for item in payload["items"]], ["active"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -81,7 +81,8 @@ final class DashboardViewModel: ObservableObject {
 
         do {
             let reminders = try await reminderService.readFloatingBrainReminders()
-            state.result = await syncService.sync(reminders: reminders, listName: "Floating Brain")
+            let activeReminders = reminders.filter { !$0.completed }
+            state.result = await syncService.sync(reminders: activeReminders, listName: "Floating Brain")
         } catch {
             state.result = .failed(message: error.localizedDescription)
         }

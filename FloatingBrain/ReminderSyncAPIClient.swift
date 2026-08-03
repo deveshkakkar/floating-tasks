@@ -6,12 +6,13 @@ struct ReminderSyncAPIRequestBuilder {
     func build(reminders: [SyncReminder], listName: String, accessToken: String) throws -> URLRequest {
         guard !accessToken.isEmpty else { throw ReminderSyncAPIError.missingAccessToken }
         let endpoint = baseURL.appendingPathComponent("v1/reminders/sync")
+        let activeReminders = reminders.filter { !$0.completed }
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = try SyncPayloadEncoder().encode(
-            ReminderSyncRequest(syncID: UUID(), generatedAt: Date(), listName: listName, items: reminders)
+            ReminderSyncRequest(syncID: UUID(), generatedAt: Date(), listName: listName, items: activeReminders)
         )
         return request
     }

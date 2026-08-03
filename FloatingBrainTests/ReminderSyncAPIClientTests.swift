@@ -16,6 +16,19 @@ final class ReminderSyncAPIClientTests: XCTestCase {
         XCTAssertTrue(String(decoding: request.httpBody ?? Data(), as: UTF8.self).contains("Think"))
     }
 
+    func testRequestOmitsCompletedReminders() throws {
+        let active = SyncReminder(externalID: "active", text: "Keep", completed: false, createdAt: nil, modifiedAt: nil, dueAt: nil, priority: 0)
+        let completed = SyncReminder(externalID: "completed", text: "Done", completed: true, createdAt: nil, modifiedAt: nil, dueAt: nil, priority: 0)
+        let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).build(
+            reminders: [active, completed], listName: "Floating Brain", accessToken: "access-token"
+        )
+
+        let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
+        XCTAssertTrue(body.contains("active"))
+        XCTAssertFalse(body.contains("completed"))
+        XCTAssertFalse(body.contains("Done"))
+    }
+
     func testEmptyAccessTokenIsRejectedBeforeCreatingRequest() {
         XCTAssertThrowsError(
             try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).build(

@@ -15,6 +15,7 @@ except ModuleNotFoundError:  # Local pure-function tests do not require the AWS 
 MAX_ITEMS = 500
 MAX_TITLE_LENGTH = 500
 MAX_BODY_BYTES = 512 * 1024
+ACTIVE_TTL_SECONDS = 30 * 24 * 60 * 60
 TABLE = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"]) if boto3 else None
 
 
@@ -53,6 +54,7 @@ def parse_request(event):
             raise ValueError("reminder text is too long")
         if not isinstance(item.get("completed"), bool):
             raise ValueError("invalid completion state")
+    payload["items"] = [item for item in items if not item["completed"]]
     return payload
 
 
@@ -98,6 +100,7 @@ def handler(event, _context):
     for record in missing_record_updates(existing_reminders, incoming_ids, synced_at):
         TABLE.put_item(Item=record)
 
+    expires_at = int(datetime.now(timezone.utc).timestamp()) + ACTIVE_TTL_SECONDS
     for item in payload["items"]:
         TABLE.put_item(Item={
             "PK": partition_key,
@@ -109,12 +112,13 @@ def handler(event, _context):
             "modifiedAt": item.get("modifiedAt"),
             "dueAt": item.get("dueAt"),
             "priority": Decimal(str(item.get("priority", 0))),
+            "expiresAt": expires_at,
             "syncedAt": synced_at,
             "source": "APPLE_REMINDERS",
             "schemaVersion": 1,
         })
 
-    active_count = sum(1 for item in payload["items"] if not item["completed"])
+    active_count = len(payload["items"])
     TABLE.put_item(Item={
         **sync_key,
         "entityType": "SYNC_STATE",
