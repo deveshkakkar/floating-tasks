@@ -9,6 +9,13 @@ Parameters:
   CognitoDomainPrefix:
     Type: String
     Description: Globally unique Cognito hosted UI domain prefix.
+  SelectionTimeZone:
+    Type: String
+    Default: America/Los_Angeles
+    Description: IANA timezone used to define the daily selection boundary.
+  DailySelectionUserId:
+    Type: String
+    Description: Cognito user sub whose daily selection is materialized by the scheduler.
 
 Globals:
   Function:
@@ -18,6 +25,8 @@ Globals:
     Environment:
       Variables:
         TABLE_NAME: !Ref FloatingBrainTable
+        SELECTION_TIME_ZONE: !Ref SelectionTimeZone
+        DAILY_SELECTION_USER_ID: !Ref DailySelectionUserId
 
 Resources:
   FloatingBrainUserPool:
@@ -147,6 +156,45 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+
+  DailySelectionScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: scheduler.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeDailySelectionLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt SyncFunction.Arn
+
+  DailySelectionSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      FlexibleTimeWindow:
+        Mode: OFF
+      ScheduleExpression: cron(0 6 * * ? *)
+      ScheduleExpressionTimezone: !Ref SelectionTimeZone
+      Target:
+        Arn: !GetAtt SyncFunction.Arn
+        RoleArn: !GetAtt DailySelectionScheduleRole.Arn
+        Input: '{"source":"aws.scheduler","detail-type":"DailySelection"}'
+
+  DailySelectionSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref SyncFunction
+      Principal: scheduler.amazonaws.com
+      SourceArn: !GetAtt DailySelectionSchedule.Arn
 
 Outputs:
   UserPoolId:

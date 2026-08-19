@@ -160,6 +160,34 @@ class DailySelectionTests(unittest.TestCase):
 
         self.assertEqual(result["selectionDate"], "2026-08-18")
 
+    def test_scheduled_handler_materializes_for_configured_user(self):
+        class ExistingSelectionTable:
+            def get_item(self, **kwargs):
+                return {"Item": {
+                    "selectionDate": "2026-08-18",
+                    "generatedAt": "2026-08-18T06:00:00Z",
+                    "items": [],
+                }}
+
+        original_table = APP.TABLE
+        original_user_id = APP.os.environ.get("DAILY_SELECTION_USER_ID")
+        APP.TABLE = ExistingSelectionTable()
+        APP.os.environ["DAILY_SELECTION_USER_ID"] = "u"
+        try:
+            result = APP.handler({
+                "source": "aws.scheduler",
+                "detail-type": "DailySelection",
+            }, None)
+        finally:
+            APP.TABLE = original_table
+            if original_user_id is None:
+                APP.os.environ.pop("DAILY_SELECTION_USER_ID", None)
+            else:
+                APP.os.environ["DAILY_SELECTION_USER_ID"] = original_user_id
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertIn('"source": "scheduled-server-generation"', result["body"])
+
 
 if __name__ == "__main__":
     unittest.main()

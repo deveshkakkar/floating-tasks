@@ -142,6 +142,19 @@ def daily_handler(event, _context):
     })
 
 
+def scheduled_daily_handler(_event, _context):
+    user_id = os.environ.get("DAILY_SELECTION_USER_ID")
+    if not user_id:
+        return response(500, {"error": "daily_selection_user_not_configured"})
+
+    item = ensure_daily_selection(user_id)
+    return response(200, {
+        "date": item["selectionDate"],
+        "items": len(item.get("items", [])),
+        "source": "scheduled-server-generation",
+    })
+
+
 def active_handler(event, _context):
     user_id = user_id_from_event(event)
     if not user_id:
@@ -289,6 +302,8 @@ def missing_record_updates(existing_records, incoming_ids, synced_at):
 
 
 def handler(event, _context):
+    if event.get("source") == "aws.scheduler" and event.get("detail-type") == "DailySelection":
+        return scheduled_daily_handler(event, _context)
     route = event.get("routeKey") or event.get("rawPath") or ""
     if route in {"GET /reminders/daily", "/reminders/daily"}:
         return daily_handler(event, _context)
