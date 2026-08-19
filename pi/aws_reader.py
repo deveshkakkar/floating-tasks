@@ -16,9 +16,11 @@ class PiAWSConfiguration:
 class DynamoDBQueryClient(Protocol):
     def query(self, **kwargs: Any) -> dict[str, Any]: ...
 
+    def get_item(self, **kwargs: Any) -> dict[str, Any]: ...
+
 
 class ReadOnlyDynamoDBSource:
-    """DynamoDB adapter exposing query-only access to the dashboard selector."""
+    """DynamoDB adapter exposing read-only access to the dashboard selector."""
 
     def __init__(self, client: DynamoDBQueryClient, configuration: PiAWSConfiguration):
         self.client = client
