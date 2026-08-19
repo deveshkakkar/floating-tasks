@@ -50,6 +50,20 @@ struct DebugInfoView: View {
             }
 
             Section {
+                PaletteRow(title: "Canvas", color: FloatingBrainPalette.canvas, hex: "#F6F7FB / #101426")
+                PaletteRow(title: "Surface", color: FloatingBrainPalette.surface, hex: "#FFFFFF / #1B2238")
+                PaletteRow(title: "Brand", color: FloatingBrainPalette.brandPrimary, hex: "#51439B / #A99CF7")
+                PaletteRow(title: "Daily task", color: FloatingBrainPalette.taskAccent, hex: "#D94F6D / #FF8EA5")
+                PaletteRow(title: "Success", color: FloatingBrainPalette.success, hex: "#147A67 / #67D5BA")
+                PaletteRow(title: "Warning", color: FloatingBrainPalette.warning, hex: "#8A5A00 / #F3C56B")
+                PaletteRow(title: "Danger", color: FloatingBrainPalette.danger, hex: "#B4232F / #FF8B8B")
+            } header: {
+                Text("Theme palette")
+            } footer: {
+                Text("Light / dark values are shown in order. Status is always paired with text or an icon.")
+            }
+
+            Section {
                 Button {
                     UIPasteboard.general.string = diagnosticText
                     copied = true
@@ -60,6 +74,9 @@ struct DebugInfoView: View {
                 Text("Diagnostics intentionally exclude access tokens and reminder contents.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(FloatingBrainPalette.canvas)
+        .tint(FloatingBrainPalette.brandPrimary)
         .navigationTitle("Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
         .task { await refreshPendingTask() }
@@ -95,7 +112,8 @@ struct DebugInfoView: View {
             "Last schedule: \(BackgroundSyncScheduler.lastScheduleDescription)",
             "Last schedule error: \(BackgroundSyncScheduler.lastErrorDescription)",
             "Sync API: \(FloatingBrainEnvironment.syncAPIBaseURL.absoluteString)",
-            "Cognito: \(FloatingBrainEnvironment.cognitoConfiguration == nil ? "Not configured" : "Configured")"
+            "Cognito: \(FloatingBrainEnvironment.cognitoConfiguration == nil ? "Not configured" : "Configured")",
+            "Theme: Indigo / lavender semantic palette"
         ].joined(separator: "\n")
     }
 
@@ -112,10 +130,36 @@ private struct DebugRow: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(FloatingBrainPalette.inkSecondary)
             Text(value)
                 .font(.footnote.monospaced())
+                .foregroundStyle(FloatingBrainPalette.ink)
                 .textSelection(.enabled)
         }
+    }
+}
+
+private struct PaletteRow: View {
+    let title: String
+    let color: Color
+    let hex: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(color)
+                .frame(width: 24, height: 24)
+                .overlay(Circle().stroke(FloatingBrainPalette.border, lineWidth: 1))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(hex)
+                    .font(.caption.monospaced())
+                    .foregroundStyle(FloatingBrainPalette.inkSecondary)
+            }
+            Spacer()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title), \(hex)")
     }
 }
