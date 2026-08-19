@@ -15,6 +15,7 @@ class MissingRecordTests(unittest.TestCase):
             "PK": "USER#u",
             "SK": "REMINDER#r1",
             "status": "ACTIVE",
+            "source": "APPLE_REMINDERS",
             "missingSyncCount": 1,
         }]
 
@@ -28,6 +29,7 @@ class MissingRecordTests(unittest.TestCase):
             "PK": "USER#u",
             "SK": "REMINDER#r1",
             "status": "ACTIVE",
+            "source": "APPLE_REMINDERS",
             "missingSince": "2026-07-30T00:00:00Z",
             "missingSyncCount": 2,
         }]
@@ -41,6 +43,7 @@ class MissingRecordTests(unittest.TestCase):
         existing = [
             {"PK": "USER#u", "SK": "REMINDER#present", "status": "ACTIVE"},
             {"PK": "USER#u", "SK": "REMINDER#deleted", "status": "DELETED"},
+            {"PK": "USER#u", "SK": "REMINDER#captured", "status": "ACTIVE", "source": "SHARE_EXTENSION"},
         ]
 
         updates = APP.missing_record_updates(existing, {"present"}, "2026-08-01T00:00:00Z")
@@ -57,6 +60,105 @@ class RequestParsingTests(unittest.TestCase):
         })
 
         self.assertEqual([item["externalId"] for item in payload["items"]], ["active"])
+
+
+class ActiveReminderTests(unittest.TestCase):
+    def test_active_reminder_items_exclude_deleted_and_empty_records(self):
+        items = APP.active_reminder_items([
+            {"SK": "REMINDER#active", "status": "ACTIVE", "text": "Keep", "priority": 1},
+            {"SK": "REMINDER#deleted", "status": "DELETED", "text": "Gone"},
+            {"SK": "REMINDER#empty", "status": "ACTIVE", "text": "  "},
+        ])
+
+        self.assertEqual(items, [{
+            "externalId": "active",
+            "text": "Keep",
+            "completed": False,
+            "createdAt": None,
+            "modifiedAt": None,
+            "dueAt": None,
+            "priority": 1,
+        }])
+
+    def test_cursor_round_trips_dynamodb_key(self):
+        key = {"PK": "USER#u", "SK": "REMINDER#task-1"}
+        self.assertEqual(APP.decode_cursor(APP.encode_cursor(key)), key)
+
+    def test_invalid_cursor_is_rejected(self):
+        self.assertIsNone(APP.decode_cursor("not-a-cursor"))
+
+
+class DailySelectionTests(unittest.TestCase):
+    reminders = [
+        {"SK": "REMINDER#one", "status": "ACTIVE", "text": "One", "priority": 1},
+        {"SK": "REMINDER#two", "status": "ACTIVE", "text": "Two", "priority": 0},
+        {"SK": "REMINDER#three", "status": "ACTIVE", "text": "Three", "priority": 2},
+        {"SK": "REMINDER#done", "status": "COMPLETED", "text": "Done", "priority": 0},
+    ]
+
+    def test_selection_is_deterministic_and_contains_at_most_three_active_items(self):
+        first = APP.daily_selection_items("u", "2026-08-18", self.reminders)
+        second = APP.daily_selection_items("u", "2026-08-18", list(reversed(self.reminders)))
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 3)
+        self.assertEqual([item["slot"] for item in first], [1, 2, 3])
+        self.assertNotIn("done", {item["externalId"] for item in first})
+
+    def test_same_day_item_is_not_regenerated(self):
+        item = APP.daily_selection_item("u", "2026-08-18", "2026-08-18T06:00:00Z", self.reminders)
+
+        self.assertEqual(item["PK"], "USER#u")
+        self.assertEqual(item["SK"], "DAILY#2026-08-18")
+        self.assertEqual(item["entityType"], "DAILY_SELECTION")
+        self.assertEqual(item["selectionDate"], "2026-08-18")
+        self.assertEqual(item["generatedAt"], "2026-08-18T06:00:00Z")
+
+    def test_daily_endpoint_returns_existing_server_selection(self):
+        class ExistingSelectionTable:
+            def get_item(self, **kwargs):
+                return {"Item": {
+                    "selectionDate": "2026-08-18",
+                    "generatedAt": "2026-08-18T06:00:00Z",
+                    "items": [{"slot": 1, "externalId": "one", "text": "One", "priority": 1}],
+                }}
+
+        original_table = APP.TABLE
+        APP.TABLE = ExistingSelectionTable()
+        try:
+            result = APP.daily_handler({
+                "requestContext": {"authorizer": {"jwt": {"claims": {"sub": "u"}}}}
+            }, None)
+        finally:
+            APP.TABLE = original_table
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertIn('"source": "server"', result["body"])
+        self.assertIn('"externalId": "one"', result["body"])
+
+    def test_timezone_controls_the_selection_date(self):
+        from datetime import datetime, timezone
+
+        instant = datetime(2026, 8, 19, 2, 30, tzinfo=timezone.utc)
+
+        self.assertEqual(APP.selection_date(instant, "America/Los_Angeles"), "2026-08-18")
+
+    def test_existing_selection_is_returned_without_query_or_write(self):
+        class ExistingSelectionTable:
+            def get_item(self, **kwargs):
+                return {"Item": {"selectionDate": "2026-08-18", "items": []}}
+
+            def query(self, **kwargs):
+                raise AssertionError("existing selections must not query reminders")
+
+            def put_item(self, **kwargs):
+                raise AssertionError("existing selections must not be written")
+
+        result = APP.ensure_daily_selection(
+            "u", date_key="2026-08-18", generated_at="ignored", table=ExistingSelectionTable()
+        )
+
+        self.assertEqual(result["selectionDate"], "2026-08-18")
 
 
 if __name__ == "__main__":

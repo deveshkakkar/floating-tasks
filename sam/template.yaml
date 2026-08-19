@@ -123,6 +123,30 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        Active:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FloatingBrainHttpApi
+            Path: /reminders/active
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        Daily:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FloatingBrainHttpApi
+            Path: /reminders/daily
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        Capture:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FloatingBrainHttpApi
+            Path: /items/capture
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
 
 Outputs:
   UserPoolId:
