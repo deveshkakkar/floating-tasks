@@ -4,6 +4,7 @@ protocol ReminderSyncService {
     func sync(reminders: [SyncReminder], listName: String) async -> SyncResult
     func fetchActiveReminders() async throws -> [SyncReminder]
     func fetchDailyReminders() async throws -> [SyncReminder]
+    func checkBackend() async -> BackendDiagnostics
     func fetchActiveRemindersPage(limit: Int, cursor: String?) async throws -> ReminderPage
     func capture(tasks: [CapturedTask]) async throws
 }
@@ -24,6 +25,17 @@ struct UnconfiguredReminderSyncService: ReminderSyncService {
 
     func fetchDailyReminders() async throws -> [SyncReminder] {
         throw ReminderSyncAPIError.missingAccessToken
+    }
+
+    func checkBackend() async -> BackendDiagnostics {
+        BackendDiagnostics(
+            state: .unconfigured,
+            message: "The sync service is not configured.",
+            checkedAt: Date(),
+            latencyMilliseconds: nil,
+            selectionDate: nil,
+            selectionTaskCount: nil
+        )
     }
 
     func fetchActiveRemindersPage(limit: Int, cursor: String?) async throws -> ReminderPage {

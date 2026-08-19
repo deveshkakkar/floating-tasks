@@ -207,6 +207,54 @@ struct ReminderSyncAPIClient: ReminderSyncService {
     }
 
     func fetchDailyReminders() async throws -> [SyncReminder] {
+        try await fetchDailySelection().items.sorted { $0.slot < $1.slot }.map { $0.reminder }
+    }
+
+    func checkBackend() async -> BackendDiagnostics {
+        let startedAt = Date()
+        do {
+            let selection = try await fetchDailySelection()
+            return BackendDiagnostics(
+                state: .configured,
+                message: "Authenticated API responded successfully.",
+                checkedAt: Date(),
+                latencyMilliseconds: Int(Date().timeIntervalSince(startedAt) * 1_000),
+                selectionDate: selection.date,
+                selectionTaskCount: selection.items.count
+            )
+        } catch let error as ReminderSyncAPIError {
+            let state: BackendDiagnostics.State
+            switch error {
+            case .missingAccessToken:
+                state = .unauthenticated
+            case .serverError(401):
+                state = .unauthenticated
+            case .invalidResponse:
+                state = .invalidResponse
+            default:
+                state = .unavailable
+            }
+            return BackendDiagnostics(
+                state: state,
+                message: error.localizedDescription,
+                checkedAt: Date(),
+                latencyMilliseconds: Int(Date().timeIntervalSince(startedAt) * 1_000),
+                selectionDate: nil,
+                selectionTaskCount: nil
+            )
+        } catch {
+            return BackendDiagnostics(
+                state: .unavailable,
+                message: error.localizedDescription,
+                checkedAt: Date(),
+                latencyMilliseconds: Int(Date().timeIntervalSince(startedAt) * 1_000),
+                selectionDate: nil,
+                selectionTaskCount: nil
+            )
+        }
+    }
+
+    private func fetchDailySelection() async throws -> DailySelectionResponse {
         guard let tokens = try tokenStore.load() else {
             throw ReminderSyncAPIError.missingAccessToken
         }
@@ -234,8 +282,7 @@ struct ReminderSyncAPIClient: ReminderSyncService {
 
             let decoder = JSONDecoder()
             decoder.dateDecodingStrategy = .iso8601
-            let selection = try decoder.decode(DailySelectionResponse.self, from: data)
-            return selection.items.sorted { $0.slot < $1.slot }.map { $0.reminder }
+            return try decoder.decode(DailySelectionResponse.self, from: data)
         }
     }
 

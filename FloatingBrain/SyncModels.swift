@@ -54,6 +54,33 @@ struct DailySelectionItem: Decodable, Equatable {
     }
 }
 
+struct BackendDiagnostics: Equatable {
+    enum State: String {
+        case notChecked = "Not checked"
+        case configured = "Healthy"
+        case unauthenticated = "Authentication required"
+        case unavailable = "Unavailable"
+        case invalidResponse = "Invalid response"
+        case unconfigured = "Not configured"
+    }
+
+    let state: State
+    let message: String
+    let checkedAt: Date?
+    let latencyMilliseconds: Int?
+    let selectionDate: String?
+    let selectionTaskCount: Int?
+
+    static let notChecked = BackendDiagnostics(
+        state: .notChecked,
+        message: "Run a backend check to verify the authenticated API and daily selection.",
+        checkedAt: nil,
+        latencyMilliseconds: nil,
+        selectionDate: nil,
+        selectionTaskCount: nil
+    )
+}
+
 struct ReminderSyncRequest: Codable, Equatable {
     let syncID: UUID
     let generatedAt: Date

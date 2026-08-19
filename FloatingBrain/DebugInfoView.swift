@@ -50,6 +50,25 @@ struct DebugInfoView: View {
             }
 
             Section {
+                DebugRow(title: "Status", value: viewModel.backendDiagnostics.state.rawValue)
+                DebugRow(title: "Message", value: viewModel.backendDiagnostics.message)
+                DebugRow(title: "Checked", value: backendCheckedDescription)
+                DebugRow(title: "Latency", value: backendLatencyDescription)
+                DebugRow(title: "Server selection date", value: viewModel.backendDiagnostics.selectionDate ?? "Unavailable")
+                DebugRow(title: "Server selection count", value: viewModel.backendDiagnostics.selectionTaskCount.map(String.init) ?? "Unavailable")
+                Button {
+                    Task { await viewModel.refreshBackendDiagnostics() }
+                } label: {
+                    Label(viewModel.isCheckingBackend ? "Checking backend…" : "Check backend now", systemImage: "antenna.radiowaves.left.and.right")
+                }
+                .disabled(viewModel.isCheckingBackend)
+            } header: {
+                Text("Backend")
+            } footer: {
+                Text("Checks the authenticated daily-selection endpoint. Tokens and task text are never shown here.")
+            }
+
+            Section {
                 PaletteRow(title: "Canvas", color: FloatingBrainPalette.canvas, hex: "#F6F7FB / #101426")
                 PaletteRow(title: "Surface", color: FloatingBrainPalette.surface, hex: "#FFFFFF / #1B2238")
                 PaletteRow(title: "Brand", color: FloatingBrainPalette.brandPrimary, hex: "#51439B / #A99CF7")
@@ -79,7 +98,10 @@ struct DebugInfoView: View {
         .tint(FloatingBrainPalette.brandPrimary)
         .navigationTitle("Diagnostics")
         .navigationBarTitleDisplayMode(.inline)
-        .task { await refreshPendingTask() }
+        .task {
+            await refreshPendingTask()
+            await viewModel.refreshBackendDiagnostics()
+        }
     }
 
     private var appVersion: String {
@@ -94,6 +116,15 @@ struct DebugInfoView: View {
         case let .succeeded(date): return "Succeeded at \(date.formatted(.iso8601))"
         case let .failed(message): return "Failed: \(message)"
         }
+    }
+
+    private var backendCheckedDescription: String {
+        viewModel.backendDiagnostics.checkedAt?.formatted(.iso8601) ?? "Not checked"
+    }
+
+    private var backendLatencyDescription: String {
+        guard let latency = viewModel.backendDiagnostics.latencyMilliseconds else { return "Unavailable" }
+        return "\(latency) ms"
     }
 
     private var diagnosticText: String {
@@ -113,6 +144,11 @@ struct DebugInfoView: View {
             "Last schedule error: \(BackgroundSyncScheduler.lastErrorDescription)",
             "Sync API: \(FloatingBrainEnvironment.syncAPIBaseURL.absoluteString)",
             "Cognito: \(FloatingBrainEnvironment.cognitoConfiguration == nil ? "Not configured" : "Configured")",
+            "Backend: \(viewModel.backendDiagnostics.state.rawValue) — \(viewModel.backendDiagnostics.message)",
+            "Backend checked: \(backendCheckedDescription)",
+            "Backend latency: \(backendLatencyDescription)",
+            "Server selection date: \(viewModel.backendDiagnostics.selectionDate ?? "Unavailable")",
+            "Server selection count: \(viewModel.backendDiagnostics.selectionTaskCount.map(String.init) ?? "Unavailable")",
             "Theme: Indigo / lavender semantic palette"
         ].joined(separator: "\n")
     }

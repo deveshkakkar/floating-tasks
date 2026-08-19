@@ -14,6 +14,8 @@ final class DashboardViewModel: ObservableObject {
     @Published private(set) var isLoadingAllTasks = false
     @Published private(set) var allTasksCursor: String?
     @Published private(set) var allTasksError: String?
+    @Published private(set) var backendDiagnostics = BackendDiagnostics.notChecked
+    @Published private(set) var isCheckingBackend = false
 
     private let reminderService: any ReminderAccessService
     private let taskNotificationScheduler: any TaskNotificationScheduling
@@ -130,6 +132,13 @@ final class DashboardViewModel: ObservableObject {
         } catch {
             // Keep captures queued for the next refresh when the network is unavailable.
         }
+    }
+
+    func refreshBackendDiagnostics() async {
+        guard !isCheckingBackend else { return }
+        isCheckingBackend = true
+        defer { isCheckingBackend = false }
+        backendDiagnostics = await syncService.checkBackend()
     }
 
     func loadAllTasksPage(reset: Bool = false) async {
