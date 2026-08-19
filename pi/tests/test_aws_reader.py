@@ -17,6 +17,18 @@ class FakeDynamoDBClient:
             ]
         }
 
+    def get_item(self, **kwargs):
+        self.get_item_call = kwargs
+        return {
+            "Item": {
+                "entityType": "DAILY_SELECTION",
+                "items": [
+                    {"slot": 2, "externalId": "two", "text": "Two"},
+                    {"slot": 1, "externalId": "one", "text": "One"},
+                ],
+            }
+        }
+
 
 class ReadOnlyDynamoDBSourceTests(unittest.TestCase):
     def test_queries_one_user_partition_and_returns_active_items(self):
@@ -32,6 +44,17 @@ class ReadOnlyDynamoDBSourceTests(unittest.TestCase):
         self.assertEqual(client.calls[0]["KeyConditionExpression"], "PK = :pk AND begins_with(SK, :prefix)")
         self.assertNotIn("put_item", dir(source))
         self.assertNotIn("update_item", dir(source))
+
+    def test_reads_server_daily_selection_without_write_access(self):
+        client = FakeDynamoDBClient()
+        source = ReadOnlyDynamoDBSource(client, PiAWSConfiguration("FloatingBrain-dev", "user-1", "us-west-2"))
+
+        reminders = source.daily_selection("2026-08-18")
+
+        self.assertEqual([item.reminder_id for item in reminders], ["one", "two"])
+        self.assertEqual(client.get_item_call["Key"], {"PK": "USER#user-1", "SK": "DAILY#2026-08-18"})
+        self.assertTrue(client.get_item_call["ConsistentRead"])
+        self.assertNotIn("put_item", dir(source))
 
 
 if __name__ == "__main__":

@@ -6,14 +6,20 @@ from floating_brain import DailySelector, Reminder, SelectionStore
 
 
 class FakeSource:
-    def __init__(self, reminders=None, error=None):
+    def __init__(self, reminders=None, error=None, daily_items=None):
         self.reminders = reminders or []
         self.error = error
+        self.daily_items = daily_items
 
     def active_reminders(self):
         if self.error:
             raise self.error
         return self.reminders
+
+    def daily_selection(self, selection_date):
+        if self.error:
+            raise self.error
+        return self.daily_items if self.daily_items is not None else self.reminders[:3]
 
 
 class DailySelectorTests(unittest.TestCase):
@@ -48,6 +54,7 @@ class DailySelectorTests(unittest.TestCase):
         selection = DailySelector(source, self.store, lambda: self.now).get()
 
         self.assertEqual(len(selection.items), 3)
+        self.assertEqual(selection.source, "server")
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ import base64
 import json
 import os
 import random
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -64,8 +64,25 @@ def selection_date(now=None, time_zone=None):
     return current.astimezone(zone).date().isoformat()
 
 
-def daily_selection_items(user_id, date_key, reminders):
+def daily_selection_items(user_id, date_key, reminders, recent_selections=()):
     candidates = sorted(active_reminder_items(reminders), key=lambda item: item["externalId"])
+    selected_by_date = {
+        selection["selectionDate"]: {item["externalId"] for item in selection.get("items", [])}
+        for selection in recent_selections
+    }
+    current_date = datetime.strptime(date_key, "%Y-%m-%d").date()
+
+    def eligible(days):
+        cutoff = current_date - timedelta(days=days)
+        excluded = {
+            reminder_id
+            for selected_date, reminder_ids in selected_by_date.items()
+            if cutoff.isoformat() <= selected_date < date_key
+            for reminder_id in reminder_ids
+        }
+        return [item for item in candidates if item["externalId"] not in excluded]
+
+    candidates = eligible(7) or eligible(3) or candidates
     randomizer = random.Random(f"{user_id}:{date_key}:daily-selection-v1")
     randomizer.shuffle(candidates)
     return [
@@ -79,7 +96,7 @@ def daily_selection_items(user_id, date_key, reminders):
     ]
 
 
-def daily_selection_item(user_id, date_key, generated_at, reminders):
+def daily_selection_item(user_id, date_key, generated_at, reminders, recent_selections=()):
     return {
         "PK": f"USER#{user_id}",
         "SK": f"DAILY#{date_key}",
@@ -88,7 +105,7 @@ def daily_selection_item(user_id, date_key, generated_at, reminders):
         "selectionDate": date_key,
         "generatedAt": generated_at,
         "timeZone": os.environ.get("SELECTION_TIME_ZONE", DEFAULT_SELECTION_TIME_ZONE),
-        "items": daily_selection_items(user_id, date_key, reminders),
+        "items": daily_selection_items(user_id, date_key, reminders, recent_selections),
         "expiresAt": int(datetime.now(timezone.utc).timestamp()) + DAILY_SELECTION_TTL_SECONDS,
     }
 
@@ -99,6 +116,22 @@ def _query_all_reminders(table, partition_key):
     while True:
         result = table.query(**query)
         items.extend(result.get("Items", []))
+        last_key = result.get("LastEvaluatedKey")
+        if not last_key:
+            return items
+        query["ExclusiveStartKey"] = last_key
+
+
+def _query_recent_daily_selections(table, partition_key, date_key):
+    cutoff = (datetime.strptime(date_key, "%Y-%m-%d").date() - timedelta(days=7)).isoformat()
+    items = []
+    query = {"KeyConditionExpression": Key("PK").eq(partition_key) & Key("SK").begins_with("DAILY#")}
+    while True:
+        result = table.query(**query)
+        items.extend(
+            item for item in result.get("Items", [])
+            if cutoff <= item.get("selectionDate", "") < date_key
+        )
         last_key = result.get("LastEvaluatedKey")
         if not last_key:
             return items
@@ -118,7 +151,13 @@ def ensure_daily_selection(user_id, date_key=None, generated_at=None, table=None
     if existing:
         return existing
 
-    item = daily_selection_item(user_id, date_key, generated_at, _query_all_reminders(table, key["PK"]))
+    item = daily_selection_item(
+        user_id,
+        date_key,
+        generated_at,
+        _query_all_reminders(table, key["PK"]),
+        _query_recent_daily_selections(table, key["PK"], date_key),
+    )
     try:
         table.put_item(Item=item, ConditionExpression="attribute_not_exists(PK)")
         return item

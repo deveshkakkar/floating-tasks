@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import random
 import sqlite3
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date
 from typing import Callable, Iterable, Protocol
 
 
@@ -24,6 +23,8 @@ class DailySelection:
 
 class ReminderSource(Protocol):
     def active_reminders(self) -> Iterable[Reminder]: ...
+
+    def daily_selection(self, selection_date: str) -> Iterable[Reminder]: ...
 
 
 class SelectionStore:
@@ -94,22 +95,11 @@ class DailySelector:
             return DailySelection(selection_date, generated_at, "local-cache", False, cached)
 
         try:
-            candidates = [item for item in self.source.active_reminders() if item.text.strip()]
-            selected = self._select(today, candidates)
+            selected = list(self.source.daily_selection(selection_date))
             self.store.save(selection_date, generated_at, selected)
-            return DailySelection(selection_date, generated_at, "dynamodb", False, tuple(selected))
+            return DailySelection(selection_date, generated_at, "server", False, tuple(selected))
         except Exception:
             latest = self.store.latest()
             if latest:
                 return DailySelection(selection_date, generated_at, "local-cache", True, latest[1])
             raise
-
-    def _select(self, today: date, candidates: list[Reminder]) -> list[Reminder]:
-        def eligible(days: int) -> list[Reminder]:
-            cutoff = (today - timedelta(days=days)).isoformat()
-            return [item for item in candidates if (self.store.last_shown(item.reminder_id) or "") < cutoff]
-
-        pool = eligible(7) or eligible(3) or candidates
-        randomizer = random.Random(today.isoformat())
-        randomizer.shuffle(pool)
-        return pool[:3]

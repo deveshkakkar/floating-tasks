@@ -105,6 +105,16 @@ class DailySelectionTests(unittest.TestCase):
         self.assertEqual([item["slot"] for item in first], [1, 2, 3])
         self.assertNotIn("done", {item["externalId"] for item in first})
 
+    def test_selection_avoids_items_selected_within_the_previous_seven_days(self):
+        recent = [{
+            "selectionDate": "2026-08-15",
+            "items": [{"externalId": "one"}],
+        }]
+
+        selected = APP.daily_selection_items("u", "2026-08-18", self.reminders, recent)
+
+        self.assertNotIn("one", {item["externalId"] for item in selected})
+
     def test_same_day_item_is_not_regenerated(self):
         item = APP.daily_selection_item("u", "2026-08-18", "2026-08-18T06:00:00Z", self.reminders)
 

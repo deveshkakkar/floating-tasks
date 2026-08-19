@@ -45,3 +45,22 @@ class ReadOnlyDynamoDBSource:
             for item in response.get("Items", [])
             if item.get("status") == "ACTIVE" and item.get("text", "").strip()
         ]
+
+    def daily_selection(self, selection_date: str) -> list[Reminder]:
+        response = self.client.get_item(
+            TableName=self.configuration.table_name,
+            Key={
+                "PK": f"USER#{self.configuration.user_id}",
+                "SK": f"DAILY#{selection_date}",
+            },
+            ConsistentRead=True,
+        )
+        selection = response.get("Item")
+        if not selection or selection.get("entityType") != "DAILY_SELECTION":
+            raise LookupError(f"No server daily selection for {selection_date}")
+
+        return [
+            Reminder(item["externalId"], item["text"])
+            for item in sorted(selection.get("items", []), key=lambda item: item["slot"])
+            if isinstance(item.get("text"), str) and item["text"].strip()
+        ]

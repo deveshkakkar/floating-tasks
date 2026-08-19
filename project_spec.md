@@ -16,7 +16,7 @@ Floating Brain is a personal task-resurfacing system that allows the user to cap
 
 The user will continue using Apple Reminders as the only task-capture interface. A lightweight iOS helper application will securely synchronize reminders from a designated Apple Reminders list to AWS.
 
-The Raspberry Pi will have read-only access to the DynamoDB table. It will retrieve active items, select three items for the current day, cache the daily selection locally, and make those items available to the dashboard renderer.
+The server will select and persist three items for the current day. The iOS app, widgets, notifications, and Raspberry Pi will read that same server-owned selection. The Raspberry Pi retains read-only DynamoDB access and caches the daily selection locally for offline display.
 
 The Raspberry Pi will not:
 
@@ -469,9 +469,9 @@ The system must not depend on guaranteed continuous iOS background execution.
 The Raspberry Pi application must:
 
 1. Authenticate to AWS using temporary credentials.
-2. Read active reminders from DynamoDB.
+2. Read the server-owned daily selection from DynamoDB.
 3. Never write, update, or delete DynamoDB records.
-4. Select three reminders for the current day.
+4. Never select or shuffle reminders locally.
 5. Cache the selected reminders locally.
 6. Reuse the cached selection throughout the day.
 7. Continue displaying the cached selection if AWS is unavailable.
@@ -591,22 +591,22 @@ The local database is used only for dashboard state. It is not synchronized back
 
 ### 8.1 Daily Stability
 
-The same three reminders must be displayed for the full local calendar day.
+The server materializes one ordered `DAILY#<local-date>` record shortly after the start of each configured local day. The same three reminders must be displayed for the full local calendar day.
+
+The scheduled server job is the normal creation path. The daily API endpoint uses the same idempotent ensure operation as a recovery path if the scheduled job is missed.
 
 When the dashboard loads:
 
 1. Determine the current local date.
 2. Check the local SQLite `daily_selection` table.
 3. If three records already exist for today, return them.
-4. Otherwise, retrieve active reminders from DynamoDB.
-5. Apply eligibility rules.
-6. Select up to three reminders.
-7. Store them in SQLite.
-8. Return the saved selection.
+4. Otherwise, read the server-owned `DAILY#<local-date>` record from DynamoDB.
+5. Store the server-provided ordered items in SQLite.
+6. Return the saved selection.
 
 ---
 
-### 8.2 Eligibility Rules
+### 8.2 Server Eligibility Rules
 
 A reminder is eligible when:
 
@@ -615,7 +615,7 @@ status = ACTIVE
 text is not empty
 ```
 
-Initially exclude reminders shown within the previous seven days.
+The server applies the eligibility and repetition policy when it creates the daily record. Consumers do not reapply or reinterpret those rules.
 
 If fewer than three reminders remain:
 
@@ -627,7 +627,7 @@ If fewer than three reminders remain:
 
 ### 8.3 Controlled Randomness
 
-The MVP should use randomized selection with repetition protection.
+The server performs randomized selection once when creating the daily record. The first successful conditional write wins; later requests never reshuffle the day.
 
 Optional weighting:
 
@@ -975,7 +975,7 @@ The MVP is accepted when all of the following are true:
 7. The Pi authenticates using temporary credentials.
 8. The Pi can read active reminders from DynamoDB.
 9. The Pi cannot write to DynamoDB.
-10. The Pi selects up to three reminders.
+10. The server selects up to three reminders and persists the ordered daily record.
 11. The selection remains stable throughout the day.
 12. The Pi can display a cached selection while offline.
 13. Completing a reminder in Apple Reminders eventually removes it from the eligible dashboard pool.
@@ -1017,7 +1017,7 @@ The MVP is accepted when all of the following are true:
 * Create read-only DynamoDB IAM policy
 * Install Python application
 * Create local SQLite cache
-* Implement daily-selection logic
+* Read the server-owned daily selection
 * Add systemd service and timer
 
 ### Phase 4 — Dashboard Integration
@@ -1068,4 +1068,3 @@ Possible later capabilities include:
 | Offline operation             | Use cached selection                  |
 
 This version is suitable as the baseline for the AWS, iOS, and Raspberry Pi implementation.
-
