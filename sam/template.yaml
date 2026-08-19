@@ -181,7 +181,7 @@ Resources:
     Type: AWS::Scheduler::Schedule
     Properties:
       FlexibleTimeWindow:
-        Mode: OFF
+        Mode: 'OFF'
       ScheduleExpression: cron(0 6 * * ? *)
       ScheduleExpressionTimezone: !Ref SelectionTimeZone
       Target:
