@@ -86,23 +86,6 @@ final class SyncModelsTests: XCTestCase {
         )
     }
 
-    func testDailyTaskStoreOnlyReturnsSelectionForToday() {
-        let suiteName = "FloatingBrainDailyTaskTests.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let today = Date(timeIntervalSince1970: 1_754_000_000)
-        let calendar = Calendar(identifier: .gregorian)
-        let selection = DailyTaskSelection(
-            dateKey: DailyTaskStore.dateKey(for: today, calendar: calendar),
-            tasks: [DailyTask(id: "task-1", text: "Make progress", priority: 0)]
-        )
-        let store = DailyTaskStore(defaults: defaults)
-        store.save(selection)
-
-        XCTAssertEqual(store.selection(for: today, calendar: calendar), selection)
-        XCTAssertNil(store.selection(for: today.addingTimeInterval(86_400), calendar: calendar))
-    }
 }
 
 private extension JSONDecoder {

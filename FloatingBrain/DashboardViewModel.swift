@@ -64,6 +64,8 @@ final class DashboardViewModel: ObservableObject {
         reminderError = nil
         defer { isLoadingReminders = false }
 
+        clearPublishedDailyTasks()
+
         do {
             let snapshot = try await reminderService.readFloatingBrainList()
             state.selectedListName = snapshot.listName
@@ -71,7 +73,6 @@ final class DashboardViewModel: ObservableObject {
             state.completedReminderCount = snapshot.completedCount
 
             if state.authentication == .signedIn {
-                restoreCachedDailyTasks()
                 let selectedTasks = try await loadDailyTasksFromServer()
                 try? await taskNotificationScheduler.scheduleDailyTaskNotification(for: selectedTasks)
             } else {
@@ -79,9 +80,6 @@ final class DashboardViewModel: ObservableObject {
                 try? await taskNotificationScheduler.scheduleDailyTaskNotification(for: [])
             }
         } catch {
-            if state.authentication == .signedIn {
-                restoreCachedDailyTasks()
-            }
             reminderError = error.localizedDescription
         }
     }
@@ -182,7 +180,7 @@ final class DashboardViewModel: ObservableObject {
                 completed.completed = true
                 return completed
             }
-            saveDailyTasks(updatedTasks)
+            publishDailyTasks(updatedTasks)
         } catch {
             reminderError = error.localizedDescription
         }
@@ -209,7 +207,6 @@ final class DashboardViewModel: ObservableObject {
         allTasks = []
         allTasksCursor = nil
         allTasksError = nil
-        DailyTaskStore().clear()
         WidgetTaskStore().save([])
         WidgetCenter.shared.reloadAllTimelines()
         Task {
@@ -218,24 +215,22 @@ final class DashboardViewModel: ObservableObject {
     }
 
     private func loadDailyTasksFromServer() async throws -> [SyncReminder] {
+        clearPublishedDailyTasks()
         let reminders = try await syncService.fetchDailyReminders()
-        let completedIDs = Set(DailyTaskStore().selection()?.tasks.filter(\.completed).map(\.id) ?? [])
         let tasks = reminders.map {
-            DailyTask(id: $0.externalID, text: $0.text, priority: $0.priority, completed: completedIDs.contains($0.externalID))
+            DailyTask(id: $0.externalID, text: $0.text, priority: $0.priority)
         }
-        saveDailyTasks(tasks)
+        publishDailyTasks(tasks)
         return reminders
     }
 
-    private func restoreCachedDailyTasks() {
-        guard let selection = DailyTaskStore().selection() else { return }
-        dailyTasks = selection.tasks
-        WidgetTaskStore().save(selection.tasks.map { WidgetTask(id: $0.id, text: $0.text, priority: $0.priority, completed: $0.completed) })
+    private func clearPublishedDailyTasks() {
+        dailyTasks = []
+        WidgetTaskStore().save([])
         WidgetCenter.shared.reloadAllTimelines()
     }
 
-    private func saveDailyTasks(_ tasks: [DailyTask]) {
-        DailyTaskStore().save(DailyTaskSelection(dateKey: DailyTaskStore.dateKey(), tasks: tasks))
+    private func publishDailyTasks(_ tasks: [DailyTask]) {
         dailyTasks = tasks
         WidgetTaskStore().save(tasks.map { WidgetTask(id: $0.id, text: $0.text, priority: $0.priority, completed: $0.completed) })
         WidgetCenter.shared.reloadAllTimelines()
