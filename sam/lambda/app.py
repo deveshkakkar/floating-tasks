@@ -184,7 +184,7 @@ def daily_handler(event, _context):
 def scheduled_daily_handler(_event, _context):
     user_id = os.environ.get("DAILY_SELECTION_USER_ID")
     if not user_id:
-        return response(500, {"error": "daily_selection_user_not_configured"})
+        return response(200, {"source": "scheduled-server-generation", "skipped": True})
 
     item = ensure_daily_selection(user_id)
     return response(200, {

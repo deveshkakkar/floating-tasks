@@ -71,6 +71,25 @@ sam deploy \
   --no-fail-on-empty-changeset
 ```
 
+The first deployment leaves the daily scheduler disabled until the Cognito user exists. After creating the user, retrieve its Cognito `sub` and redeploy with:
+
+```bash
+sam deploy \
+  --template-file sam/template.yaml \
+  --stack-name floating-brain-dev \
+  --parameter-overrides \
+    CognitoDomainPrefix=floating-brain-dev \
+    DailySelectionUserId=<cognito-user-sub> \
+  --region us-east-1 \
+  --profile floating-brain \
+  --capabilities CAPABILITY_IAM \
+  --resolve-s3 \
+  --no-confirm-changeset \
+  --no-fail-on-empty-changeset
+```
+
+You can test selection immediately through `GET /v1/reminders/daily`; you do not need to wait for the 6:00 AM scheduler run.
+
 The deployed stack exposes the API and Cognito outputs. Keep account-specific configuration and credentials out of source control.
 
 ## Debugging
@@ -88,4 +107,3 @@ The diagnostics page intentionally excludes access tokens and reminder contents.
 ## Data retention
 
 The Lambda filters completed items before writing. Active records receive an `expiresAt` Unix timestamp 30 days in the future, and DynamoDB TTL is enabled for that attribute. TTL deletion is asynchronous, so expiration is not an exact deletion deadline.
-

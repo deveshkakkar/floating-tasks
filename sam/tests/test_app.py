@@ -198,6 +198,20 @@ class DailySelectionTests(unittest.TestCase):
         self.assertEqual(result["statusCode"], 200)
         self.assertIn('"source": "scheduled-server-generation"', result["body"])
 
+    def test_scheduled_handler_skips_before_user_is_configured(self):
+        original_user_id = APP.os.environ.pop("DAILY_SELECTION_USER_ID", None)
+        try:
+            result = APP.handler({
+                "source": "aws.scheduler",
+                "detail-type": "DailySelection",
+            }, None)
+        finally:
+            if original_user_id is not None:
+                APP.os.environ["DAILY_SELECTION_USER_ID"] = original_user_id
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertIn('"skipped": true', result["body"])
+
 
 if __name__ == "__main__":
     unittest.main()

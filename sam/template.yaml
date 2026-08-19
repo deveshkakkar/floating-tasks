@@ -15,6 +15,7 @@ Parameters:
     Description: IANA timezone used to define the daily selection boundary.
   DailySelectionUserId:
     Type: String
+    Default: ''
     Description: Cognito user sub whose daily selection is materialized by the scheduler.
 
 Globals:
