@@ -29,8 +29,14 @@ def response(status_code, body):
     return {
         "statusCode": status_code,
         "headers": {"content-type": "application/json"},
-        "body": json.dumps(body),
+        "body": json.dumps(body, default=json_default),
     }
+
+
+def json_default(value):
+    if isinstance(value, Decimal):
+        return int(value) if value == value.to_integral_value() else float(value)
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def now_iso():

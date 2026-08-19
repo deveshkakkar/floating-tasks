@@ -130,7 +130,7 @@ class DailySelectionTests(unittest.TestCase):
                 return {"Item": {
                     "selectionDate": "2026-08-18",
                     "generatedAt": "2026-08-18T06:00:00Z",
-                    "items": [{"slot": 1, "externalId": "one", "text": "One", "priority": 1}],
+                    "items": [{"slot": 1, "externalId": "one", "text": "One", "priority": APP.Decimal("1")}],
                 }}
 
         original_table = APP.TABLE
@@ -145,6 +145,7 @@ class DailySelectionTests(unittest.TestCase):
         self.assertEqual(result["statusCode"], 200)
         self.assertIn('"source": "server"', result["body"])
         self.assertIn('"externalId": "one"', result["body"])
+        self.assertIn('"priority": 1', result["body"])
 
     def test_timezone_controls_the_selection_date(self):
         from datetime import datetime, timezone
