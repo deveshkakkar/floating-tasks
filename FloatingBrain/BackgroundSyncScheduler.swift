@@ -1,6 +1,57 @@
 import BackgroundTasks
 import Foundation
 import OSLog
+import UserNotifications
+
+enum TaskNotificationSchedulerError: LocalizedError, Equatable {
+    case permissionDenied
+
+    var errorDescription: String? {
+        "Notifications permission is required for the 8:00 AM task reminder."
+    }
+}
+
+protocol TaskNotificationScheduling {
+    func scheduleDailyTaskNotification(for tasks: [SyncReminder]) async throws
+}
+
+struct LocalTaskNotificationScheduler: TaskNotificationScheduling {
+    static let identifier = "com.floatingbrain.app.daily-tasks"
+
+    private let center: UNUserNotificationCenter
+
+    init(center: UNUserNotificationCenter = .current()) {
+        self.center = center
+    }
+
+    func scheduleDailyTaskNotification(for tasks: [SyncReminder]) async throws {
+        center.removePendingNotificationRequests(withIdentifiers: [Self.identifier])
+        guard !tasks.isEmpty else { return }
+
+        guard try await center.requestAuthorization(options: [.alert, .sound]) else {
+            throw TaskNotificationSchedulerError.permissionDenied
+        }
+
+        let selectedTasks = Array(tasks.prefix(3))
+        let content = UNMutableNotificationContent()
+        content.title = "Three tasks for today"
+        content.body = selectedTasks.enumerated().map { index, task in
+            "\(index + 1). \(task.text)"
+        }.joined(separator: "\n")
+        content.sound = .default
+        content.userInfo = ["reminderIDs": selectedTasks.map(\.externalID)]
+
+        var date = DateComponents()
+        date.hour = 8
+        date.minute = 0
+        let request = UNNotificationRequest(
+            identifier: Self.identifier,
+            content: content,
+            trigger: UNCalendarNotificationTrigger(dateMatching: date, repeats: true)
+        )
+        try await center.add(request)
+    }
+}
 
 enum BackgroundSyncScheduler {
     static let identifier = "com.floatingbrain.app.refresh"

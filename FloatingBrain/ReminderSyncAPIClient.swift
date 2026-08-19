@@ -16,6 +16,48 @@ struct ReminderSyncAPIRequestBuilder {
         )
         return request
     }
+
+    func buildActiveRequest(accessToken: String, limit: Int = 25, cursor: String? = nil) throws -> URLRequest {
+        guard !accessToken.isEmpty else { throw ReminderSyncAPIError.missingAccessToken }
+        let endpoint = baseURL.appendingPathComponent("v1/reminders/active")
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        var queryItems = [URLQueryItem(name: "limit", value: String(min(max(limit, 1), 50)))]
+        if let cursor, !cursor.isEmpty {
+            queryItems.append(URLQueryItem(name: "cursor", value: cursor))
+        }
+        components?.queryItems = queryItems
+        guard let url = components?.url else { throw ReminderSyncAPIError.invalidResponse }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    func buildDailyRequest(accessToken: String) throws -> URLRequest {
+        guard !accessToken.isEmpty else { throw ReminderSyncAPIError.missingAccessToken }
+        let endpoint = baseURL.appendingPathComponent("v1/reminders/daily")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    func buildCaptureRequest(tasks: [CapturedTask], accessToken: String) throws -> URLRequest {
+        guard !accessToken.isEmpty else { throw ReminderSyncAPIError.missingAccessToken }
+        let endpoint = baseURL.appendingPathComponent("v1/items/capture")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        request.httpBody = try encoder.encode(CaptureRequest(items: tasks))
+        return request
+    }
+}
+
+private struct CaptureRequest: Encodable {
+    let items: [CapturedTask]
 }
 
 enum ReminderSyncAPIError: LocalizedError, Equatable {
@@ -124,6 +166,155 @@ struct ReminderSyncAPIClient: ReminderSyncService {
             return .failed(message: error.localizedDescription)
         } catch {
             return .failed(message: error.localizedDescription)
+        }
+    }
+
+    func fetchActiveReminders() async throws -> [SyncReminder] {
+        guard let tokens = try tokenStore.load() else {
+            throw ReminderSyncAPIError.missingAccessToken
+        }
+
+        var accessToken = tokens.accessToken
+        var didRefreshToken = false
+        var cursor: String?
+        var reminders: [SyncReminder] = []
+        while true {
+            let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).buildActiveRequest(accessToken: accessToken, cursor: cursor)
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ReminderSyncAPIError.invalidResponse
+            }
+
+            if httpResponse.statusCode == 401,
+               !didRefreshToken,
+               let refreshToken = tokens.refreshToken,
+               let tokenRefresher {
+                let refreshedTokens = try await tokenRefresher.refreshAccessToken(using: refreshToken)
+                accessToken = refreshedTokens.accessToken
+                didRefreshToken = true
+                continue
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw ReminderSyncAPIError.serverError(statusCode: httpResponse.statusCode)
+            }
+
+            let page = try decodeReminderPage(data)
+            reminders.append(contentsOf: page.items)
+            guard let nextCursor = page.nextCursor else { return reminders }
+            cursor = nextCursor
+        }
+    }
+
+    func fetchDailyReminders() async throws -> [SyncReminder] {
+        guard let tokens = try tokenStore.load() else {
+            throw ReminderSyncAPIError.missingAccessToken
+        }
+
+        var accessToken = tokens.accessToken
+        var didRefreshToken = false
+        while true {
+            let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).buildDailyRequest(accessToken: accessToken)
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ReminderSyncAPIError.invalidResponse
+            }
+            if httpResponse.statusCode == 401,
+               !didRefreshToken,
+               let refreshToken = tokens.refreshToken,
+               let tokenRefresher {
+                let refreshedTokens = try await tokenRefresher.refreshAccessToken(using: refreshToken)
+                accessToken = refreshedTokens.accessToken
+                didRefreshToken = true
+                continue
+            }
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw ReminderSyncAPIError.serverError(statusCode: httpResponse.statusCode)
+            }
+
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            let selection = try decoder.decode(DailySelectionResponse.self, from: data)
+            return selection.items.sorted { $0.slot < $1.slot }.map { $0.reminder }
+        }
+    }
+
+    func fetchActiveRemindersPage(limit: Int, cursor: String?) async throws -> ReminderPage {
+        guard let tokens = try tokenStore.load() else {
+            throw ReminderSyncAPIError.missingAccessToken
+        }
+
+        var accessToken = tokens.accessToken
+        var didRefreshToken = false
+        while true {
+            let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).buildActiveRequest(
+                accessToken: accessToken,
+                limit: limit,
+                cursor: cursor
+            )
+            let (data, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ReminderSyncAPIError.invalidResponse
+            }
+            if httpResponse.statusCode == 401,
+               !didRefreshToken,
+               let refreshToken = tokens.refreshToken,
+               let tokenRefresher {
+                let refreshedTokens = try await tokenRefresher.refreshAccessToken(using: refreshToken)
+                accessToken = refreshedTokens.accessToken
+                didRefreshToken = true
+                continue
+            }
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw ReminderSyncAPIError.serverError(statusCode: httpResponse.statusCode)
+            }
+            return try decodeReminderPage(data)
+        }
+    }
+
+    private func decodeReminderPage(_ data: Data) throws -> ReminderPage {
+        struct ActiveReminderResponse: Decodable {
+            let items: [SyncReminder]
+            let nextCursor: String?
+        }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let response = try decoder.decode(ActiveReminderResponse.self, from: data)
+        return ReminderPage(items: response.items, nextCursor: response.nextCursor)
+    }
+
+    func capture(tasks: [CapturedTask]) async throws {
+        guard !tasks.isEmpty else { return }
+        guard let tokens = try tokenStore.load() else {
+            throw ReminderSyncAPIError.missingAccessToken
+        }
+
+        var accessToken = tokens.accessToken
+        var didRefreshToken = false
+        while true {
+            let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).buildCaptureRequest(
+                tasks: tasks,
+                accessToken: accessToken
+            )
+            let (_, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw ReminderSyncAPIError.invalidResponse
+            }
+
+            if httpResponse.statusCode == 401,
+               !didRefreshToken,
+               let refreshToken = tokens.refreshToken,
+               let tokenRefresher {
+                let refreshedTokens = try await tokenRefresher.refreshAccessToken(using: refreshToken)
+                accessToken = refreshedTokens.accessToken
+                didRefreshToken = true
+                continue
+            }
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                throw ReminderSyncAPIError.serverError(statusCode: httpResponse.statusCode)
+            }
+            return
         }
     }
 }

@@ -46,6 +46,63 @@ final class SyncModelsTests: XCTestCase {
 
         XCTAssertEqual(decoded, request)
     }
+
+    func testDailySelectionResponsePreservesServerOrdering() throws {
+        let data = Data("""
+        {
+          "date": "2026-08-18",
+          "generatedAt": "2026-08-18T06:00:00Z",
+          "items": [
+            {"slot": 2, "externalId": "two", "text": "Two", "priority": 1},
+            {"slot": 1, "externalId": "one", "text": "One", "priority": 0}
+          ]
+        }
+        """.utf8)
+
+        let response = try JSONDecoder.iso8601.decode(DailySelectionResponse.self, from: data)
+
+        XCTAssertEqual(response.items.map(\.slot), [2, 1])
+        XCTAssertEqual(response.items[0].reminder.externalID, "two")
+        XCTAssertEqual(response.items[0].reminder.priority, 1)
+    }
+
+    func testWidgetTaskStoreRoundTripsTasks() {
+        let suiteName = "FloatingBrainWidgetTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let tasks = [WidgetTask(id: "task-1", text: "Walk the dog", priority: 1)]
+        WidgetTaskStore(defaults: defaults).save(tasks)
+
+        XCTAssertEqual(WidgetTaskStore(defaults: defaults).load(), tasks)
+    }
+
+    func testExistingTaskDataDefaultsToNotCompleted() throws {
+        let data = Data("{\"id\":\"task-1\",\"text\":\"Keep going\",\"priority\":0}".utf8)
+
+        XCTAssertEqual(
+            try JSONDecoder().decode(DailyTask.self, from: data),
+            DailyTask(id: "task-1", text: "Keep going", priority: 0)
+        )
+    }
+
+    func testDailyTaskStoreOnlyReturnsSelectionForToday() {
+        let suiteName = "FloatingBrainDailyTaskTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let today = Date(timeIntervalSince1970: 1_754_000_000)
+        let calendar = Calendar(identifier: .gregorian)
+        let selection = DailyTaskSelection(
+            dateKey: DailyTaskStore.dateKey(for: today, calendar: calendar),
+            tasks: [DailyTask(id: "task-1", text: "Make progress", priority: 0)]
+        )
+        let store = DailyTaskStore(defaults: defaults)
+        store.save(selection)
+
+        XCTAssertEqual(store.selection(for: today, calendar: calendar), selection)
+        XCTAssertNil(store.selection(for: today.addingTimeInterval(86_400), calendar: calendar))
+    }
 }
 
 private extension JSONDecoder {

@@ -39,6 +39,49 @@ final class ReminderSyncAPIClientTests: XCTestCase {
         }
     }
 
+    func testActiveRequestUsesAuthenticatedReadEndpoint() throws {
+        let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildActiveRequest(
+            accessToken: "access-token"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/reminders/active?limit=25")
+        XCTAssertEqual(request.httpMethod, "GET")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+    }
+
+    func testDailyRequestUsesAuthenticatedReadEndpoint() throws {
+        let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildDailyRequest(
+            accessToken: "access-token"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/reminders/daily")
+        XCTAssertEqual(request.httpMethod, "GET")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+    }
+
+    func testActiveRequestSupportsPaginationParameters() throws {
+        let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildActiveRequest(
+            accessToken: "access-token",
+            limit: 25,
+            cursor: "cursor/value"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/reminders/active?limit=25&cursor=cursor%2Fvalue")
+    }
+
+    func testCaptureRequestUsesAuthenticatedEndpointAndISO8601Date() throws {
+        let capture = CapturedTask(text: "Capture this")
+        let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildCaptureRequest(
+            tasks: [capture],
+            accessToken: "access-token"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/items/capture")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+        XCTAssertTrue(String(decoding: request.httpBody ?? Data(), as: UTF8.self).contains("capturedAt"))
+    }
+
     func testRetryPolicyRetriesTransientFailuresOnly() {
         let policy = SyncRetryPolicy(maxAttempts: 3, baseDelayNanoseconds: 10)
 

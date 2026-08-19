@@ -22,6 +22,38 @@ struct SyncReminder: Codable, Equatable, Identifiable {
     }
 }
 
+struct DailySelectionResponse: Decodable, Equatable {
+    let date: String
+    let generatedAt: Date
+    let items: [DailySelectionItem]
+}
+
+struct DailySelectionItem: Decodable, Equatable {
+    let slot: Int
+    let externalID: String
+    let text: String
+    let priority: Int
+
+    enum CodingKeys: String, CodingKey {
+        case slot
+        case externalID = "externalId"
+        case text
+        case priority
+    }
+
+    var reminder: SyncReminder {
+        SyncReminder(
+            externalID: externalID,
+            text: text,
+            completed: false,
+            createdAt: nil,
+            modifiedAt: nil,
+            dueAt: nil,
+            priority: priority
+        )
+    }
+}
+
 struct ReminderSyncRequest: Codable, Equatable {
     let syncID: UUID
     let generatedAt: Date
