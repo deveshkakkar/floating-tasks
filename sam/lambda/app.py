@@ -1,4 +1,6 @@
 import base64
+import hashlib
+import hmac
 import json
 import os
 import random
@@ -21,6 +23,7 @@ MAX_TITLE_LENGTH = 500
 MAX_BODY_BYTES = 512 * 1024
 ACTIVE_TTL_SECONDS = 30 * 24 * 60 * 60
 DAILY_SELECTION_TTL_SECONDS = 180 * 24 * 60 * 60
+PHOTON_TIMESTAMP_TOLERANCE_SECONDS = 5 * 60
 DEFAULT_SELECTION_TIME_ZONE = "America/Los_Angeles"
 TABLE = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"]) if boto3 else None
 
@@ -61,6 +64,25 @@ def active_reminder_items(records):
         }
         for record in records
         if record.get("status") == "ACTIVE" and isinstance(record.get("text"), str) and record["text"].strip()
+    ]
+
+
+def deleted_reminder_items(records):
+    return [
+        {
+            "externalId": record["SK"].removeprefix("REMINDER#"),
+            "text": record["text"],
+            "completed": False,
+            "createdAt": record.get("createdAt"),
+            "modifiedAt": record.get("modifiedAt"),
+            "dueAt": record.get("dueAt"),
+            "priority": int(record.get("priority", 0)),
+            "source": record.get("source"),
+        }
+        for record in records
+        if record.get("status") == "DELETED"
+        and isinstance(record.get("text"), str)
+        and record["text"].strip()
     ]
 
 
@@ -230,6 +252,44 @@ def active_handler(event, _context):
     })
 
 
+def archived_handler(event, _context):
+    user_id = user_id_from_event(event)
+    if not user_id:
+        return response(401, {"error": "unauthorized"})
+
+    records = _query_all_reminders(TABLE, f"USER#{user_id}")
+    return response(200, {"items": deleted_reminder_items(records)})
+
+
+def restore_handler(event, _context):
+    user_id = user_id_from_event(event)
+    if not user_id:
+        return response(401, {"error": "unauthorized"})
+    try:
+        payload = json.loads(event.get("body") or "{}")
+        external_id = payload.get("externalId")
+        if not isinstance(external_id, str) or not external_id.strip():
+            raise ValueError("externalId is required")
+    except (ValueError, json.JSONDecodeError, TypeError):
+        return response(400, {"error": "invalid_request"})
+
+    key = {"PK": f"USER#{user_id}", "SK": f"REMINDER#{external_id}"}
+    existing = TABLE.get_item(Key=key).get("Item")
+    if not existing or existing.get("status") != "DELETED":
+        return response(404, {"error": "archived_reminder_not_found"})
+    if existing.get("source") != "APPLE_REMINDERS":
+        return response(409, {"error": "unsupported_reminder_source"})
+
+    restored = dict(existing)
+    restored["status"] = "ACTIVE"
+    restored["missingSyncCount"] = 0
+    restored.pop("missingSince", None)
+    restored["expiresAt"] = int(datetime.now(timezone.utc).timestamp()) + ACTIVE_TTL_SECONDS
+    restored["modifiedAt"] = now_iso()
+    TABLE.put_item(Item=restored)
+    return response(200, {"restored": True, "externalId": external_id})
+
+
 def encode_cursor(key):
     if not key:
         return None
@@ -297,6 +357,172 @@ def capture_handler(event, _context):
     return response(200, {"captured": len(items)})
 
 
+def _header(event, name):
+    headers = event.get("headers") or {}
+    wanted = name.lower()
+    return next((value for key, value in headers.items() if key.lower() == wanted), None)
+
+
+def normalize_photon_create_text(text):
+    """Strip the first explicit create command before storing the task."""
+    import re
+
+    match = re.match(r"^(?:create|add)\s+", text, flags=re.IGNORECASE)
+    if not match:
+        return text.strip()
+
+    task_text = text[match.end():]
+    task_text = re.sub(r"^(?:a|an|the)\s+", "", task_text, flags=re.IGNORECASE)
+    task_text = re.sub(r"^(?:task|reminder|item)\s+", "", task_text, flags=re.IGNORECASE)
+    task_text = re.sub(r"^(?:to|for)\s+", "", task_text, flags=re.IGNORECASE)
+    return task_text.strip() or text.strip()
+
+
+def is_photon_query(text):
+    import re
+
+    return bool(re.match(r"^(?:query|fetch|show|list)\b", text.strip(), flags=re.IGNORECASE))
+
+
+def is_photon_help(text):
+    import re
+
+    return bool(re.match(r"^(?:help|commands|what can you do)\b", text.strip(), flags=re.IGNORECASE))
+
+
+def is_photon_archived(text):
+    import re
+
+    return bool(re.match(r"^(?:archived|archive|history)\b", text.strip(), flags=re.IGNORECASE))
+
+
+def is_photon_restore(text):
+    import re
+
+    return bool(re.match(r"^(?:restore|bring back)\s+", text.strip(), flags=re.IGNORECASE))
+
+
+def is_photon_complete(text):
+    import re
+
+    return bool(re.match(r"^(?:complete|finish|done|mark done)\s+", text.strip(), flags=re.IGNORECASE))
+
+
+def is_photon_daily(text):
+    import re
+
+    return bool(re.match(r"^(?:today|daily|what should i do)\b", text.strip(), flags=re.IGNORECASE))
+
+
+def complete_handler(event, _context):
+    user_id = user_id_from_event(event)
+    if not user_id:
+        return response(401, {"error": "unauthorized"})
+    try:
+        payload = json.loads(event.get("body") or "{}")
+        external_id = payload.get("externalId")
+        if not isinstance(external_id, str) or not external_id.strip():
+            raise ValueError("externalId is required")
+    except (ValueError, json.JSONDecodeError, TypeError):
+        return response(400, {"error": "invalid_request"})
+
+    key = {"PK": f"USER#{user_id}", "SK": f"REMINDER#{external_id}"}
+    existing = TABLE.get_item(Key=key).get("Item")
+    if not existing or existing.get("status") != "ACTIVE":
+        return response(404, {"error": "active_reminder_not_found"})
+    if existing.get("source") == "APPLE_REMINDERS":
+        return response(409, {"error": "complete_in_apple_reminders"})
+
+    completed = dict(existing)
+    completed["status"] = "COMPLETED"
+    completed["modifiedAt"] = now_iso()
+    TABLE.put_item(Item=completed)
+    return response(200, {"completed": True, "externalId": external_id})
+
+
+def verify_photon_signature(raw_body, timestamp, signature, secret, now=None):
+    if not timestamp or not signature or not secret:
+        return False
+    try:
+        timestamp_value = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+    current_timestamp = int((now or datetime.now(timezone.utc)).timestamp())
+    if abs(current_timestamp - timestamp_value) > PHOTON_TIMESTAMP_TOLERANCE_SECONDS:
+        return False
+    expected = "v0=" + hmac.new(
+        secret.encode("utf-8"),
+        f"v0:{timestamp}:".encode("utf-8") + raw_body,
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+def photon_webhook_handler(event, _context):
+    raw_body = event.get("body") or ""
+    try:
+        raw_body = base64.b64decode(raw_body) if event.get("isBase64Encoded") else raw_body.encode("utf-8")
+    except (ValueError, UnicodeEncodeError):
+        return response(400, {"error": "invalid_request"})
+
+    if not verify_photon_signature(
+        raw_body,
+        _header(event, "X-Spectrum-Timestamp"),
+        _header(event, "X-Spectrum-Signature"),
+        os.environ.get("PHOTON_WEBHOOK_SIGNING_SECRET", ""),
+    ):
+        return response(401, {"error": "invalid_signature"})
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+        message = payload.get("message", {})
+        sender = message.get("sender", {})
+        content = message.get("content", {})
+        message_id = message.get("id")
+        sender_id = sender.get("id")
+        text = content.get("text")
+        if payload.get("event") != "messages":
+            return response(200, {"ignored": True})
+        if not isinstance(message_id, str) or not message_id.strip():
+            raise ValueError("message id is required")
+        if sender_id != os.environ.get("PHOTON_ALLOWED_SENDER", ""):
+            return response(403, {"error": "sender_not_allowed"})
+        if content.get("type") != "text" or not isinstance(text, str) or not text.strip():
+            return response(200, {"ignored": True})
+        if is_photon_query(text) or is_photon_help(text) or is_photon_archived(text) or is_photon_restore(text) or is_photon_complete(text) or is_photon_daily(text):
+            return response(200, {"ignored": True})
+        if len(text) > MAX_TITLE_LENGTH:
+            return response(400, {"error": "text_too_long"})
+        user_id = os.environ.get("PHOTON_USER_ID", "")
+        if not user_id:
+            return response(503, {"error": "photon_user_not_configured"})
+    except (AttributeError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+        return response(400, {"error": "invalid_request"})
+
+    key = {"PK": f"USER#{user_id}", "SK": f"REMINDER#capture:photon:{message_id}"}
+    if TABLE.get_item(Key=key).get("Item"):
+        return response(200, {"captured": 0, "idempotent": True})
+
+    captured_at = message.get("timestamp") or now_iso()
+    text = normalize_photon_create_text(text)
+    expires_at = int(datetime.now(timezone.utc).timestamp()) + ACTIVE_TTL_SECONDS
+    TABLE.put_item(Item={
+        **key,
+        "entityType": "REMINDER",
+        "text": text.strip(),
+        "status": "ACTIVE",
+        "createdAt": captured_at,
+        "modifiedAt": captured_at,
+        "dueAt": None,
+        "priority": Decimal("0"),
+        "expiresAt": expires_at,
+        "source": "PHOTON",
+        "photonMessageId": message_id,
+        "schemaVersion": 1,
+    })
+    return response(200, {"captured": 1})
+
+
 def parse_request(event):
     raw_body = event.get("body") or "{}"
     if event.get("isBase64Encoded"):
@@ -350,10 +576,18 @@ def handler(event, _context):
     if event.get("source") == "aws.scheduler" and event.get("detail-type") == "DailySelection":
         return scheduled_daily_handler(event, _context)
     route = event.get("routeKey") or event.get("rawPath") or ""
+    if route in {"POST /photon/webhook", "/photon/webhook"}:
+        return photon_webhook_handler(event, _context)
     if route in {"GET /reminders/daily", "/reminders/daily"}:
         return daily_handler(event, _context)
     if route in {"GET /reminders/active", "/reminders/active"}:
         return active_handler(event, _context)
+    if route in {"GET /reminders/archived", "/reminders/archived"}:
+        return archived_handler(event, _context)
+    if route in {"POST /reminders/restore", "/reminders/restore"}:
+        return restore_handler(event, _context)
+    if route in {"POST /reminders/complete", "/reminders/complete"}:
+        return complete_handler(event, _context)
     if route in {"POST /items/capture", "/items/capture"}:
         return capture_handler(event, _context)
 

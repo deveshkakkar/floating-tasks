@@ -14,6 +14,9 @@ final class DashboardViewModel: ObservableObject {
     @Published private(set) var isLoadingAllTasks = false
     @Published private(set) var allTasksCursor: String?
     @Published private(set) var allTasksError: String?
+    @Published private(set) var archivedTasks: [ArchivedReminder] = []
+    @Published private(set) var archivedTasksError: String?
+    @Published private(set) var isLoadingArchivedTasks = false
     @Published private(set) var backendDiagnostics = BackendDiagnostics.notChecked
     @Published private(set) var isCheckingBackend = false
 
@@ -162,6 +165,28 @@ final class DashboardViewModel: ObservableObject {
         }
     }
 
+    func loadArchivedTasks() async {
+        guard state.authentication == .signedIn, !isLoadingArchivedTasks else { return }
+        isLoadingArchivedTasks = true
+        archivedTasksError = nil
+        defer { isLoadingArchivedTasks = false }
+        do {
+            archivedTasks = try await syncService.fetchArchivedReminders()
+        } catch {
+            archivedTasksError = error.localizedDescription
+        }
+    }
+
+    func restoreArchivedTask(_ task: ArchivedReminder) async {
+        do {
+            try await syncService.restoreReminder(withID: task.externalID)
+            archivedTasks.removeAll { $0.id == task.id }
+            await loadAllTasksPage(reset: true)
+        } catch {
+            archivedTasksError = error.localizedDescription
+        }
+    }
+
     func addReminder(text: String) async -> Bool {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
@@ -216,6 +241,8 @@ final class DashboardViewModel: ObservableObject {
         allTasks = []
         allTasksCursor = nil
         allTasksError = nil
+        archivedTasks = []
+        archivedTasksError = nil
         WidgetTaskStore().save([])
         WidgetCenter.shared.reloadAllTimelines()
         Task {

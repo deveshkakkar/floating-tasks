@@ -69,6 +69,27 @@ final class ReminderSyncAPIClientTests: XCTestCase {
         XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/reminders/active?limit=25&cursor=cursor%2Fvalue")
     }
 
+    func testArchivedRequestUsesAuthenticatedReadEndpoint() throws {
+        let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildArchivedRequest(
+            accessToken: "access-token"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/reminders/archived")
+        XCTAssertEqual(request.httpMethod, "GET")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+    }
+
+    func testRestoreRequestCarriesExternalIDAndAuthentication() throws {
+        let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildRestoreRequest(
+            externalID: "old-task", accessToken: "access-token"
+        )
+
+        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/reminders/restore")
+        XCTAssertEqual(request.httpMethod, "POST")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+        XCTAssertTrue(String(decoding: request.httpBody ?? Data(), as: UTF8.self).contains("old-task"))
+    }
+
     func testCaptureRequestUsesAuthenticatedEndpointAndISO8601Date() throws {
         let capture = CapturedTask(text: "Capture this")
         let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildCaptureRequest(

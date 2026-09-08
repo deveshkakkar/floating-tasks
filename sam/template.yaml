@@ -6,6 +6,9 @@ Parameters:
   CallbackURL:
     Type: String
     Default: floatingbrain://oauth/callback
+  LocalCallbackURL:
+    Type: String
+    Default: http://127.0.0.1:8765/callback
   CognitoDomainPrefix:
     Type: String
     Description: Globally unique Cognito hosted UI domain prefix.
@@ -17,6 +20,19 @@ Parameters:
     Type: String
     Default: ''
     Description: Cognito user sub whose daily selection is materialized by the scheduler.
+  PhotonUserId:
+    Type: String
+    Default: ''
+    Description: Cognito user sub that receives verified Photon brain dumps.
+  PhotonAllowedSender:
+    Type: String
+    Default: ''
+    Description: Exact Photon sender identifier allowed to create brain dumps.
+  PhotonWebhookSigningSecret:
+    Type: String
+    Default: ''
+    NoEcho: true
+    Description: Photon webhook signing secret returned when the webhook is registered.
 
 Globals:
   Function:
@@ -28,6 +44,9 @@ Globals:
         TABLE_NAME: !Ref FloatingBrainTable
         SELECTION_TIME_ZONE: !Ref SelectionTimeZone
         DAILY_SELECTION_USER_ID: !Ref DailySelectionUserId
+        PHOTON_USER_ID: !Ref PhotonUserId
+        PHOTON_ALLOWED_SENDER: !Ref PhotonAllowedSender
+        PHOTON_WEBHOOK_SIGNING_SECRET: !Ref PhotonWebhookSigningSecret
 
 Resources:
   FloatingBrainUserPool:
@@ -62,6 +81,7 @@ Resources:
         - COGNITO
       CallbackURLs:
         - !Ref CallbackURL
+        - !Ref LocalCallbackURL
       LogoutURLs:
         - !Ref CallbackURL
 
@@ -141,6 +161,30 @@ Resources:
             Method: GET
             Auth:
               Authorizer: CognitoAuthorizer
+        Archived:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FloatingBrainHttpApi
+            Path: /reminders/archived
+            Method: GET
+            Auth:
+              Authorizer: CognitoAuthorizer
+        Restore:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FloatingBrainHttpApi
+            Path: /reminders/restore
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
+        Complete:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FloatingBrainHttpApi
+            Path: /reminders/complete
+            Method: POST
+            Auth:
+              Authorizer: CognitoAuthorizer
         Daily:
           Type: HttpApi
           Properties:
@@ -157,6 +201,12 @@ Resources:
             Method: POST
             Auth:
               Authorizer: CognitoAuthorizer
+        PhotonWebhook:
+          Type: HttpApi
+          Properties:
+            ApiId: !Ref FloatingBrainHttpApi
+            Path: /photon/webhook
+            Method: POST
 
   DailySelectionScheduleRole:
     Type: AWS::IAM::Role

@@ -342,6 +342,14 @@ private struct AllTasksView: View {
                 }
                 .accessibilityLabel("Add reminder")
             }
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    ArchivedTasksView(viewModel: viewModel)
+                } label: {
+                    Image(systemName: "archivebox")
+                }
+                .accessibilityLabel("Archived tasks")
+            }
         }
         .sheet(isPresented: $isShowingAddReminder) {
             AddReminderView(viewModel: viewModel)
@@ -350,6 +358,43 @@ private struct AllTasksView: View {
         .task {
             await viewModel.loadAllTasksPage(reset: true)
         }
+    }
+}
+
+@MainActor
+private struct ArchivedTasksView: View {
+    @ObservedObject var viewModel: DashboardViewModel
+
+    var body: some View {
+        List {
+            ForEach(viewModel.archivedTasks) { task in
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(task.text)
+                        Text(task.source ?? "Unknown source")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if task.source == "APPLE_REMINDERS" {
+                        Button("Restore") {
+                            Task { await viewModel.restoreArchivedTask(task) }
+                        }
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+            if let error = viewModel.archivedTasksError {
+                Text(error).foregroundStyle(FloatingBrainPalette.danger)
+            }
+        }
+        .overlay {
+            if viewModel.archivedTasks.isEmpty && !viewModel.isLoadingArchivedTasks {
+                ContentUnavailableView("No archived tasks", systemImage: "archivebox")
+            }
+        }
+        .navigationTitle("Archived Tasks")
+        .task { await viewModel.loadArchivedTasks() }
     }
 }
 

@@ -10,7 +10,9 @@ Floating Brain is a native iOS app that syncs the active reminders in the `Float
 - Does not sync completed reminders.
 - Stores active reminders in DynamoDB with a 30-day TTL. The expiration is refreshed when an active task is synced.
 - Supports manual sync, Shortcuts sync, and scheduled background refresh attempts.
+- Accepts private brain dumps by text message through Photon webhooks.
 - Includes a diagnostics page opened with the ladybug icon in the dashboard.
+- Includes an archived-task view for inspecting deleted Apple Reminders records and restoring them.
 
 ## Repository layout
 
@@ -91,6 +93,35 @@ sam deploy \
 You can test selection immediately through `GET /v1/reminders/daily`; you do not need to wait for the 6:00 AM scheduler run.
 
 The deployed stack exposes the API and Cognito outputs. Keep account-specific configuration and credentials out of source control.
+
+## Text brain dumps with Photon
+
+Photon sends signed inbound messages to the public `POST /v1/photon/webhook` route. The Lambda verifies the signature and timestamp, accepts only the configured sender, deduplicates Photon message IDs, and stores text as an active `PHOTON` item. Attachments and other message types are ignored.
+
+After the stack is deployed, register the webhook in Photon using the project ID and secret from your Photon account:
+
+```bash
+curl --request POST \
+  --url https://spectrum.photon.codes/projects/<photon-project-id>/webhooks/ \
+  --user '<photon-project-id>:<photon-project-secret>' \
+  --header 'Content-Type: application/json' \
+  --data '{"webhookUrl":"https://<api-id>.execute-api.<region>.amazonaws.com/v1/photon/webhook"}'
+```
+
+Save the returned `signingSecret`; Photon returns it only when the webhook is created. Redeploy with `PhotonUserId` set to the Cognito user `sub`, `PhotonAllowedSender` set to your exact Photon sender ID (normally your E.164 phone number), and `PhotonWebhookSigningSecret` set to that secret. Keep all three values out of source control. The Photon endpoint is intentionally unauthenticated at API Gateway because Photon authenticates it with its signed webhook headers.
+
+## Release checklist
+
+Before TestFlight or production deployment:
+
+1. Deploy the SAM stack with a production stack name, unique Cognito domain prefix, and the intended `DailySelectionUserId`.
+2. Copy the generated Cognito and API outputs into the app’s release configuration; do not commit user-specific values or tokens.
+3. Confirm the App ID, widget and Share Extension bundle IDs, App Group, URL scheme, and push/background capabilities in the Apple Developer account.
+4. Archive with a real signing team and verify the app, widget, and Share Extension are all embedded in the archive.
+5. Run the physical-device smoke test after signing the archive: sign-in, sync, capture, restore, Siri, Share Extension, widget refresh, and notification delivery.
+6. Verify the production Lambda logs, DynamoDB TTL, Cognito user creation, and scheduled daily-selection invocation.
+
+The archived-task endpoints are `GET /v1/reminders/archived` and `POST /v1/reminders/restore` with `{ "externalId": "..." }`. Restore is intentionally limited to records sourced from Apple Reminders; Share Extension and Siri captures are never soft-deleted by sync.
 
 ## Debugging
 

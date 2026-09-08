@@ -6,6 +6,8 @@ protocol ReminderSyncService {
     func fetchDailyReminders() async throws -> [SyncReminder]
     func checkBackend() async -> BackendDiagnostics
     func fetchActiveRemindersPage(limit: Int, cursor: String?) async throws -> ReminderPage
+    func fetchArchivedReminders() async throws -> [ArchivedReminder]
+    func restoreReminder(withID externalID: String) async throws
     func capture(tasks: [CapturedTask]) async throws
 }
 
@@ -39,6 +41,14 @@ struct UnconfiguredReminderSyncService: ReminderSyncService {
     }
 
     func fetchActiveRemindersPage(limit: Int, cursor: String?) async throws -> ReminderPage {
+        throw ReminderSyncAPIError.missingAccessToken
+    }
+
+    func fetchArchivedReminders() async throws -> [ArchivedReminder] {
+        throw ReminderSyncAPIError.missingAccessToken
+    }
+
+    func restoreReminder(withID externalID: String) async throws {
         throw ReminderSyncAPIError.missingAccessToken
     }
 

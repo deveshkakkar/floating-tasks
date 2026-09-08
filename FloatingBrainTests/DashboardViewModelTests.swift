@@ -8,7 +8,11 @@ final class DashboardViewModelTests: XCTestCase {
             status: .authorized,
             snapshot: ReminderListSnapshot(listName: "Floating Brain", activeCount: 3, completedCount: 2)
         )
-        let viewModel = DashboardViewModel(reminderService: service)
+        let notificationScheduler = MockTaskNotificationScheduler()
+        let viewModel = DashboardViewModel(
+            reminderService: service,
+            taskNotificationScheduler: notificationScheduler
+        )
 
         await viewModel.refreshReminderStatus()
 
@@ -16,6 +20,7 @@ final class DashboardViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.state.activeReminderCount, 3)
         XCTAssertEqual(viewModel.state.completedReminderCount, 2)
         XCTAssertNil(viewModel.reminderError)
+        XCTAssertEqual(notificationScheduler.scheduledTaskCount, 0)
     }
 
     func testDeniedAccessDoesNotAttemptToReadList() async {
@@ -26,6 +31,14 @@ final class DashboardViewModelTests: XCTestCase {
 
         XCTAssertEqual(viewModel.state.remindersPermission, .denied)
         XCTAssertFalse(service.didReadList)
+    }
+}
+
+private final class MockTaskNotificationScheduler: TaskNotificationScheduling {
+    private(set) var scheduledTaskCount: Int?
+
+    func scheduleDailyTaskNotification(for tasks: [SyncReminder]) async throws {
+        scheduledTaskCount = tasks.count
     }
 }
 
@@ -50,4 +63,6 @@ private final class MockReminderAccessService: ReminderAccessService {
     }
 
     func readFloatingBrainReminders() async throws -> [SyncReminder] { [] }
+
+    func completeReminder(withID externalID: String) async throws {}
 }

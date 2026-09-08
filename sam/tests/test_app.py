@@ -1,5 +1,10 @@
 import importlib.util
+import hashlib
+import hmac
+import json
+import os
 import pathlib
+import time
 import unittest
 
 
@@ -51,6 +56,154 @@ class MissingRecordTests(unittest.TestCase):
         self.assertEqual(updates, [])
 
 
+class PhotonWebhookTests(unittest.TestCase):
+    secret = "test-secret"
+
+    def setUp(self):
+        self.original = {key: APP.os.environ.get(key) for key in (
+            "PHOTON_WEBHOOK_SIGNING_SECRET", "PHOTON_USER_ID", "PHOTON_ALLOWED_SENDER"
+        )}
+        APP.os.environ.update({
+            "PHOTON_WEBHOOK_SIGNING_SECRET": self.secret,
+            "PHOTON_USER_ID": "u",
+            "PHOTON_ALLOWED_SENDER": "+15551234567",
+        })
+
+    def tearDown(self):
+        for key, value in self.original.items():
+            if value is None:
+                APP.os.environ.pop(key, None)
+            else:
+                APP.os.environ[key] = value
+
+    def event(self, payload, signature_secret=None, timestamp=None):
+        body = json.dumps(payload, separators=(",", ":"))
+        timestamp = str(timestamp or int(time.time()))
+        signature_secret = signature_secret or self.secret
+        signature = "v0=" + hmac.new(
+            signature_secret.encode(), f"v0:{timestamp}:{body}".encode(), hashlib.sha256
+        ).hexdigest()
+        return {
+            "routeKey": "POST /photon/webhook",
+            "body": body,
+            "headers": {
+                "x-spectrum-timestamp": timestamp,
+                "x-spectrum-signature": signature,
+            },
+        }
+
+    def payload(self, message_id="m1", text="Remember this"):
+        return {
+            "event": "messages",
+            "message": {
+                "id": message_id,
+                "timestamp": "2026-08-20T12:00:00Z",
+                "sender": {"id": "+15551234567"},
+                "content": {"type": "text", "text": text},
+            },
+        }
+
+    def test_verifies_signature_and_captures_text(self):
+        class Table:
+            def __init__(self):
+                self.items = {}
+            def get_item(self, Key):
+                return {"Item": self.items.get((Key["PK"], Key["SK"]))} if (Key["PK"], Key["SK"]) in self.items else {}
+            def put_item(self, Item):
+                self.items[(Item["PK"], Item["SK"])] = Item
+
+        table = Table()
+        original_table = APP.TABLE
+        APP.TABLE = table
+        try:
+            result = APP.handler(self.event(self.payload()), None)
+        finally:
+            APP.TABLE = original_table
+
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"captured": 1}')
+        item = next(iter(table.items.values()))
+        self.assertEqual(item["source"], "PHOTON")
+        self.assertEqual(item["text"], "Remember this")
+
+    def test_create_command_stores_only_task_text(self):
+        class Table:
+            def __init__(self):
+                self.items = {}
+            def get_item(self, Key):
+                key = (Key["PK"], Key["SK"])
+                return {"Item": self.items[key]} if key in self.items else {}
+            def put_item(self, Item):
+                self.items[(Item["PK"], Item["SK"])] = Item
+
+        table = Table()
+        original_table = APP.TABLE
+        APP.TABLE = table
+        try:
+            result = APP.handler(self.event(self.payload(text="Create a task to buy milk")), None)
+        finally:
+            APP.TABLE = original_table
+
+        self.assertEqual(result["statusCode"], 200)
+        item = next(iter(table.items.values()))
+        self.assertEqual(item["text"], "buy milk")
+
+    def test_query_command_is_not_captured_as_a_task(self):
+        result = APP.handler(self.event(self.payload(text="query active tasks")), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"ignored": true}')
+
+    def test_fetch_command_is_not_captured_as_a_task(self):
+        result = APP.handler(self.event(self.payload(text="fetch active tasks")), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"ignored": true}')
+
+    def test_help_command_is_not_captured_as_a_task(self):
+        result = APP.handler(self.event(self.payload(text="help")), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"ignored": true}')
+
+    def test_archived_command_is_not_captured_as_a_task(self):
+        result = APP.handler(self.event(self.payload(text="show archived tasks")), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"ignored": true}')
+
+    def test_restore_command_is_not_captured_as_a_task(self):
+        result = APP.handler(self.event(self.payload(text="restore old task")), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"ignored": true}')
+
+    def test_complete_command_is_not_captured_as_a_task(self):
+        result = APP.handler(self.event(self.payload(text="complete old task")), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"ignored": true}')
+
+    def test_daily_command_is_not_captured_as_a_task(self):
+        result = APP.handler(self.event(self.payload(text="today")), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(result["body"], '{"ignored": true}')
+
+    def test_rejects_bad_signature_and_deduplicates_message(self):
+        class Table:
+            def __init__(self): self.calls = 0
+            def get_item(self, Key): return {}
+            def put_item(self, Item): self.calls += 1
+        table = Table()
+        original_table = APP.TABLE
+        APP.TABLE = table
+        try:
+            bad = self.event(self.payload(), signature_secret="wrong")
+            self.assertEqual(APP.handler(bad, None)["statusCode"], 401)
+            first = APP.handler(self.event(self.payload()), None)
+            table.get_item = lambda Key: {"Item": {"PK": Key["PK"], "SK": Key["SK"]}}
+            second = APP.handler(self.event(self.payload()), None)
+        finally:
+            APP.TABLE = original_table
+        self.assertEqual(first["statusCode"], 200)
+        self.assertEqual(second["body"], '{"captured": 0, "idempotent": true}')
+        self.assertEqual(table.calls, 1)
+
+
 class RequestParsingTests(unittest.TestCase):
     def test_completed_items_are_removed_from_sync_payload(self):
         payload = APP.parse_request({
@@ -86,6 +239,69 @@ class ActiveReminderTests(unittest.TestCase):
 
     def test_invalid_cursor_is_rejected(self):
         self.assertIsNone(APP.decode_cursor("not-a-cursor"))
+
+    def test_deleted_items_are_exposed_for_archive_view(self):
+        items = APP.deleted_reminder_items([
+            {"SK": "REMINDER#old", "status": "DELETED", "text": "Old", "source": "APPLE_REMINDERS"},
+            {"SK": "REMINDER#active", "status": "ACTIVE", "text": "Keep"},
+        ])
+        self.assertEqual(items[0]["externalId"], "old")
+        self.assertEqual(items[0]["source"], "APPLE_REMINDERS")
+
+    def test_restore_rejects_non_apple_sources(self):
+        class Table:
+            def get_item(self, **kwargs):
+                return {"Item": {"SK": "REMINDER#capture", "status": "DELETED", "source": "SHARE_EXTENSION"}}
+
+        original = APP.TABLE
+        table = Table()
+        APP.TABLE = table
+        try:
+            result = APP.restore_handler({
+                "requestContext": {"authorizer": {"jwt": {"claims": {"sub": "u"}}}},
+                "body": '{"externalId":"capture"}',
+            }, None)
+        finally:
+            APP.TABLE = original
+        self.assertEqual(result["statusCode"], 409)
+
+    def test_complete_marks_cloud_task_completed(self):
+        class Table:
+            def __init__(self):
+                self.item = {"PK": "USER#u", "SK": "REMINDER#capture", "status": "ACTIVE", "source": "PHOTON"}
+            def get_item(self, **kwargs):
+                return {"Item": self.item}
+            def put_item(self, Item):
+                self.item = Item
+
+        original = APP.TABLE
+        table = Table()
+        APP.TABLE = table
+        try:
+            result = APP.complete_handler({
+                "requestContext": {"authorizer": {"jwt": {"claims": {"sub": "u"}}}},
+                "body": '{"externalId":"capture"}',
+            }, None)
+        finally:
+            APP.TABLE = original
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(table.item["status"], "COMPLETED")
+
+    def test_complete_rejects_apple_task(self):
+        class Table:
+            def get_item(self, **kwargs):
+                return {"Item": {"status": "ACTIVE", "source": "APPLE_REMINDERS"}}
+
+        original = APP.TABLE
+        APP.TABLE = Table()
+        try:
+            result = APP.complete_handler({
+                "requestContext": {"authorizer": {"jwt": {"claims": {"sub": "u"}}}},
+                "body": '{"externalId":"apple"}',
+            }, None)
+        finally:
+            APP.TABLE = original
+        self.assertEqual(result["statusCode"], 409)
 
 
 class DailySelectionTests(unittest.TestCase):

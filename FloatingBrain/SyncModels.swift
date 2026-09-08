@@ -22,6 +22,23 @@ struct SyncReminder: Codable, Equatable, Identifiable {
     }
 }
 
+struct ArchivedReminder: Decodable, Equatable, Identifiable {
+    let externalID: String
+    let text: String
+    let source: String?
+    let createdAt: Date?
+    let modifiedAt: Date?
+    let dueAt: Date?
+    let priority: Int
+
+    var id: String { externalID }
+
+    enum CodingKeys: String, CodingKey {
+        case externalID = "externalId"
+        case text, source, createdAt, modifiedAt, dueAt, priority
+    }
+}
+
 struct DailySelectionResponse: Decodable, Equatable {
     let date: String
     let generatedAt: Date

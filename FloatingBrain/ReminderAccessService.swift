@@ -10,6 +10,7 @@ struct ReminderListSnapshot: Equatable {
 enum ReminderAccessError: LocalizedError, Equatable {
     case permissionDenied
     case listNotFound
+    case reminderNotFound
     case unavailable
 
     var errorDescription: String? {
@@ -18,6 +19,8 @@ enum ReminderAccessError: LocalizedError, Equatable {
             "Reminders access is required to read the Floating Brain list."
         case .listNotFound:
             "Create a Reminders list named Floating Brain to continue."
+        case .reminderNotFound:
+            "That reminder is no longer available. Refresh and try again."
         case .unavailable:
             "Reminders are unavailable on this device."
         }
@@ -29,6 +32,7 @@ protocol ReminderAccessService {
     func requestAccess() async throws -> Bool
     func readFloatingBrainList() async throws -> ReminderListSnapshot
     func readFloatingBrainReminders() async throws -> [SyncReminder]
+    func completeReminder(withID externalID: String) async throws
 }
 
 final class EventKitReminderAccessService: ReminderAccessService {
@@ -74,6 +78,17 @@ final class EventKitReminderAccessService: ReminderAccessService {
 
         let reminders = try await fetchReminders(matching: eventStore.predicateForReminders(in: [list]))
         return reminders.compactMap(SyncReminder.init)
+    }
+
+    func completeReminder(withID externalID: String) async throws {
+        guard authorizationStatus() == .authorized else {
+            throw ReminderAccessError.permissionDenied
+        }
+        guard let reminder = eventStore.calendarItem(withIdentifier: externalID) as? EKReminder else {
+            throw ReminderAccessError.reminderNotFound
+        }
+        reminder.isCompleted = true
+        try eventStore.save(reminder, commit: true)
     }
 
     private func fetchReminders(matching predicate: NSPredicate) async throws -> [EKReminder] {
