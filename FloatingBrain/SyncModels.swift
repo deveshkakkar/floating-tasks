@@ -103,12 +103,22 @@ struct ReminderSyncRequest: Codable, Equatable {
     let generatedAt: Date
     let listName: String
     let items: [SyncReminder]
+    let completedItems: [SyncReminder]
+
+    init(syncID: UUID, generatedAt: Date, listName: String, items: [SyncReminder], completedItems: [SyncReminder] = []) {
+        self.syncID = syncID
+        self.generatedAt = generatedAt
+        self.listName = listName
+        self.items = items
+        self.completedItems = completedItems
+    }
 
     enum CodingKeys: String, CodingKey {
         case syncID = "syncId"
         case generatedAt
         case listName
         case items
+        case completedItems
     }
 }
 

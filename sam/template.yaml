@@ -47,8 +47,26 @@ Globals:
         PHOTON_USER_ID: !Ref PhotonUserId
         PHOTON_ALLOWED_SENDER: !Ref PhotonAllowedSender
         PHOTON_WEBHOOK_SIGNING_SECRET: !Ref PhotonWebhookSigningSecret
+        HISTORY_BUCKET_NAME: !Ref FloatingBrainHistoryBucket
 
 Resources:
+  FloatingBrainHistoryBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+
   FloatingBrainUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -144,6 +162,10 @@ Resources:
                 - dynamodb:BatchWriteItem
                 - dynamodb:TransactWriteItems
               Resource: !GetAtt FloatingBrainTable.Arn
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+              Resource: !Sub ${FloatingBrainHistoryBucket.Arn}/users/*/deleted/*
       Events:
         Sync:
           Type: HttpApi

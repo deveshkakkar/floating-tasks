@@ -445,6 +445,9 @@ Suggested rule:
 
 * First missing sync: set `missingSince`
 * Missing for three consecutive successful syncs: set `status = DELETED`
+* Set the deleted row's DynamoDB TTL to 24 hours after the deletion transition
+
+Deleted Apple Reminder records are archived as immutable JSON history objects in the encrypted S3 history bucket before the soft-deleted DynamoDB row is written.
 
 ---
 
@@ -617,9 +620,13 @@ text is not empty
 
 The server applies the eligibility and repetition policy when it creates the daily record. Consumers do not reapply or reinterpret those rules.
 
+Daily selection records expire two days after their `generatedAt` timestamp.
+
+The backend archives daily-selection creation, reminder completion, and confirmed reminder deletion events as immutable JSON history objects in the encrypted S3 history bucket. The history is used for effectiveness analysis and is not required by the daily display path.
+
 If fewer than three reminders remain:
 
-1. Reduce the exclusion window from seven days to three days.
+1. Reduce the exclusion window from two days to one day.
 2. If still insufficient, remove the exclusion window.
 3. If fewer than three active reminders exist, display all available reminders.
 

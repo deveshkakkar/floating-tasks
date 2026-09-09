@@ -25,7 +25,7 @@ final class SyncModelsTests: XCTestCase {
 
         XCTAssertEqual(
             json,
-            "{\"generatedAt\":\"1970-01-01T00:00:00Z\",\"items\":[{\"completed\":false,\"createdAt\":\"1970-01-01T00:00:00Z\",\"dueAt\":null,\"externalId\":\"apple-1\",\"modifiedAt\":null,\"priority\":1,\"text\":\"Replace the bedroom air filter\"}],\"listName\":\"Floating Brain\",\"syncId\":\"00000000-0000-0000-0000-000000000001\"}"
+            "{\"completedItems\":[],\"generatedAt\":\"1970-01-01T00:00:00Z\",\"items\":[{\"completed\":false,\"createdAt\":\"1970-01-01T00:00:00Z\",\"dueAt\":null,\"externalId\":\"apple-1\",\"modifiedAt\":null,\"priority\":1,\"text\":\"Replace the bedroom air filter\"}],\"listName\":\"Floating Brain\",\"syncId\":\"00000000-0000-0000-0000-000000000001\"}"
         )
     }
 

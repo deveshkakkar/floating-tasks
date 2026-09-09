@@ -12,7 +12,13 @@ struct ReminderSyncAPIRequestBuilder {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
         request.httpBody = try SyncPayloadEncoder().encode(
-            ReminderSyncRequest(syncID: UUID(), generatedAt: Date(), listName: listName, items: activeReminders)
+            ReminderSyncRequest(
+                syncID: UUID(),
+                generatedAt: Date(),
+                listName: listName,
+                items: activeReminders,
+                completedItems: reminders.filter(\.completed)
+            )
         )
         return request
     }

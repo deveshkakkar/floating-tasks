@@ -138,3 +138,8 @@ The diagnostics page intentionally excludes access tokens and reminder contents.
 ## Data retention
 
 The Lambda filters completed items before writing. Active records receive an `expiresAt` Unix timestamp 30 days in the future, and DynamoDB TTL is enabled for that attribute. TTL deletion is asynchronous, so expiration is not an exact deletion deadline.
+
+When an Apple Reminder is confirmed deleted after the three-sync grace period, its soft-deleted row receives a 24-hour TTL from the deletion transition.
+Daily selection rows receive a two-day TTL from their creation timestamp.
+
+Reminders confirmed deleted after the three-sync grace period are archived as encrypted, versioned JSON in the S3 history bucket before their DynamoDB row receives its 24-hour TTL. Daily selections and completion events are archived in the same event history for effectiveness analysis; see `ANALYTICS_SPEC.md`.

@@ -105,8 +105,7 @@ final class DashboardViewModel: ObservableObject {
 
         do {
             let reminders = try await reminderService.readFloatingBrainReminders()
-            let activeReminders = reminders.filter { !$0.completed }
-            state.result = await syncService.sync(reminders: activeReminders, listName: "Floating Brain")
+            state.result = await syncService.sync(reminders: reminders, listName: "Floating Brain")
             if case .succeeded = state.result {
                 do {
                     let selectedTasks = try await loadDailyTasksFromServer()

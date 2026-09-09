@@ -43,6 +43,31 @@ class MissingRecordTests(unittest.TestCase):
 
         self.assertEqual(update["status"], "DELETED")
         self.assertEqual(update["missingSyncCount"], 3)
+        self.assertEqual(update["deletedAt"], "2026-08-01T00:00:00Z")
+        self.assertEqual(update["expiresAt"], 1785628800)
+
+    def test_deleted_reminder_can_be_archived_to_s3(self):
+        class S3Client:
+            def put_object(self, **kwargs):
+                self.kwargs = kwargs
+
+        client = S3Client()
+        record = {
+            "PK": "USER#u",
+            "SK": "REMINDER#task/1",
+            "status": "DELETED",
+            "text": "A deleted task",
+            "deletedAt": "2026-08-01T00:00:00Z",
+        }
+
+        APP.archive_deleted_reminder("u", record, client, "history-bucket")
+
+        self.assertEqual(
+            client.kwargs["Key"],
+            "users/u/events/2026-08-01/REMINDER_DELETED/2026-08-01T00%3A00%3A00Z-task%2F1.json",
+        )
+        self.assertEqual(client.kwargs["ServerSideEncryption"], "AES256")
+        self.assertEqual(json.loads(client.kwargs["Body"])["eventType"], "REMINDER_DELETED")
 
     def test_present_and_deleted_records_are_not_updated(self):
         existing = [
@@ -213,6 +238,15 @@ class RequestParsingTests(unittest.TestCase):
         })
 
         self.assertEqual([item["externalId"] for item in payload["items"]], ["active"])
+        self.assertEqual(payload["completedItems"], [])
+
+    def test_completed_items_are_accepted_for_history(self):
+        payload = APP.parse_request({
+            "body": '{"syncId":"s1","listName":"Floating Brain","items":[],'
+            '"completedItems":[{"externalId":"done","text":"Done","completed":true}]}'
+        })
+
+        self.assertEqual([item["externalId"] for item in payload["completedItems"]], ["done"])
 
 
 class ActiveReminderTests(unittest.TestCase):
@@ -321,15 +355,28 @@ class DailySelectionTests(unittest.TestCase):
         self.assertEqual([item["slot"] for item in first], [1, 2, 3])
         self.assertNotIn("done", {item["externalId"] for item in first})
 
-    def test_selection_avoids_items_selected_within_the_previous_seven_days(self):
+    def test_selection_avoids_items_selected_within_the_previous_two_days(self):
+        recent = [{
+            "selectionDate": "2026-08-17",
+            "items": [{"externalId": "one"}],
+        }]
+
+        reminders = self.reminders[:3] + [
+            {"SK": "REMINDER#four", "status": "ACTIVE", "text": "Four", "priority": 0},
+        ]
+        selected = APP.daily_selection_items("u", "2026-08-18", reminders, recent)
+
+        self.assertNotIn("one", {item["externalId"] for item in selected})
+
+    def test_selection_allows_items_older_than_two_days(self):
         recent = [{
             "selectionDate": "2026-08-15",
             "items": [{"externalId": "one"}],
         }]
 
-        selected = APP.daily_selection_items("u", "2026-08-18", self.reminders, recent)
+        selected = APP.daily_selection_items("u", "2026-08-18", self.reminders[:3], recent)
 
-        self.assertNotIn("one", {item["externalId"] for item in selected})
+        self.assertEqual({item["externalId"] for item in selected}, {"one", "two", "three"})
 
     def test_same_day_item_is_not_regenerated(self):
         item = APP.daily_selection_item("u", "2026-08-18", "2026-08-18T06:00:00Z", self.reminders)
@@ -339,6 +386,7 @@ class DailySelectionTests(unittest.TestCase):
         self.assertEqual(item["entityType"], "DAILY_SELECTION")
         self.assertEqual(item["selectionDate"], "2026-08-18")
         self.assertEqual(item["generatedAt"], "2026-08-18T06:00:00Z")
+        self.assertEqual(item["expiresAt"], 1787205600)
 
     def test_daily_endpoint_returns_existing_server_selection(self):
         class ExistingSelectionTable:

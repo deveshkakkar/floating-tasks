@@ -6,6 +6,7 @@ import os
 import random
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 try:
@@ -22,10 +23,13 @@ MAX_ACTIVE_PAGE_SIZE = 50
 MAX_TITLE_LENGTH = 500
 MAX_BODY_BYTES = 512 * 1024
 ACTIVE_TTL_SECONDS = 30 * 24 * 60 * 60
-DAILY_SELECTION_TTL_SECONDS = 180 * 24 * 60 * 60
+DELETED_TTL_SECONDS = 24 * 60 * 60
+DAILY_SELECTION_TTL_SECONDS = 2 * 24 * 60 * 60
 PHOTON_TIMESTAMP_TOLERANCE_SECONDS = 5 * 60
 DEFAULT_SELECTION_TIME_ZONE = "America/Los_Angeles"
 TABLE = boto3.resource("dynamodb").Table(os.environ["TABLE_NAME"]) if boto3 else None
+S3 = boto3.client("s3") if boto3 else None
+HISTORY_BUCKET_NAME = os.environ.get("HISTORY_BUCKET_NAME")
 
 
 def response(status_code, body):
@@ -44,6 +48,10 @@ def json_default(value):
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def epoch_seconds(instant):
+    return int(datetime.fromisoformat(instant.replace("Z", "+00:00")).timestamp())
 
 
 def user_id_from_event(event):
@@ -110,7 +118,12 @@ def daily_selection_items(user_id, date_key, reminders, recent_selections=()):
         }
         return [item for item in candidates if item["externalId"] not in excluded]
 
-    candidates = eligible(7) or eligible(3) or candidates
+    candidates = eligible(2)
+    if len(candidates) < 3:
+        candidates = eligible(1)
+    if len(candidates) < 3:
+        candidates = active_reminder_items(reminders)
+        candidates = sorted(candidates, key=lambda item: item["externalId"])
     randomizer = random.Random(f"{user_id}:{date_key}:daily-selection-v1")
     randomizer.shuffle(candidates)
     return [
@@ -134,7 +147,7 @@ def daily_selection_item(user_id, date_key, generated_at, reminders, recent_sele
         "generatedAt": generated_at,
         "timeZone": os.environ.get("SELECTION_TIME_ZONE", DEFAULT_SELECTION_TIME_ZONE),
         "items": daily_selection_items(user_id, date_key, reminders, recent_selections),
-        "expiresAt": int(datetime.now(timezone.utc).timestamp()) + DAILY_SELECTION_TTL_SECONDS,
+        "expiresAt": epoch_seconds(generated_at) + DAILY_SELECTION_TTL_SECONDS,
     }
 
 
@@ -188,6 +201,13 @@ def ensure_daily_selection(user_id, date_key=None, generated_at=None, table=None
     )
     try:
         table.put_item(Item=item, ConditionExpression="attribute_not_exists(PK)")
+        archive_history_event(
+            user_id,
+            "DAILY_SELECTION_CREATED",
+            generated_at,
+            {"selection": item},
+            date_key,
+        )
         return item
     except Exception as error:
         if not _is_conditional_write_conflict(error):
@@ -434,9 +454,17 @@ def complete_handler(event, _context):
         return response(409, {"error": "complete_in_apple_reminders"})
 
     completed = dict(existing)
+    completed_at = now_iso()
     completed["status"] = "COMPLETED"
-    completed["modifiedAt"] = now_iso()
+    completed["modifiedAt"] = completed_at
     TABLE.put_item(Item=completed)
+    archive_history_event(
+        user_id,
+        "REMINDER_COMPLETED",
+        completed_at,
+        {"reminder": completed},
+        external_id,
+    )
     return response(200, {"completed": True, "externalId": external_id})
 
 
@@ -547,6 +575,19 @@ def parse_request(event):
         if not isinstance(item.get("completed"), bool):
             raise ValueError("invalid completion state")
     payload["items"] = [item for item in items if not item["completed"]]
+    completed_items = payload.get("completedItems", [])
+    if not isinstance(completed_items, list) or len(completed_items) > MAX_ITEMS:
+        raise ValueError("invalid completed item count")
+    for item in completed_items:
+        if not isinstance(item, dict) or not isinstance(item.get("externalId"), str):
+            raise ValueError("invalid completed reminder")
+        if not item["externalId"] or not isinstance(item.get("text"), str) or not item["text"].strip():
+            raise ValueError("invalid completed reminder text")
+        if not isinstance(item.get("completed"), bool) or not item["completed"]:
+            raise ValueError("invalid completed reminder state")
+        if len(item["text"]) > MAX_TITLE_LENGTH:
+            raise ValueError("completed reminder text is too long")
+    payload["completedItems"] = completed_items
     return payload
 
 
@@ -568,8 +609,67 @@ def missing_record_updates(existing_records, incoming_ids, synced_at):
         updated["syncedAt"] = synced_at
         if missing_count >= 3:
             updated["status"] = "DELETED"
+            updated["deletedAt"] = synced_at
+            updated["expiresAt"] = epoch_seconds(synced_at) + DELETED_TTL_SECONDS
         updates.append(updated)
     return updates
+
+
+def archive_deleted_reminder(user_id, record, s3_client=None, bucket_name=None):
+    external_id = record["SK"].removeprefix("REMINDER#")
+    deleted_at = record["deletedAt"]
+    archive_history_event(
+        user_id,
+        "REMINDER_DELETED",
+        deleted_at,
+        {"reminder": record},
+        external_id,
+        s3_client=s3_client,
+        bucket_name=bucket_name,
+        required=True,
+    )
+
+
+def archive_history_event(
+    user_id,
+    event_type,
+    occurred_at,
+    data,
+    identifier,
+    s3_client=None,
+    bucket_name=None,
+    required=False,
+):
+    bucket_name = bucket_name or HISTORY_BUCKET_NAME
+    s3_client = s3_client or S3
+    if not bucket_name or s3_client is None:
+        if required:
+            raise RuntimeError("History archive is not configured")
+        return False
+
+    date_key = occurred_at[:10]
+    safe_identifier = quote(identifier, safe="")
+    safe_occurred_at = quote(occurred_at, safe="")
+    key = f"users/{user_id}/events/{date_key}/{event_type}/{safe_occurred_at}-{safe_identifier}.json"
+    payload = {
+        "eventType": event_type,
+        "userId": user_id,
+        "occurredAt": occurred_at,
+        **data,
+    }
+    try:
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=key,
+            Body=json.dumps(payload, default=json_default, sort_keys=True).encode("utf-8"),
+            ContentType="application/json",
+            ServerSideEncryption="AES256",
+        )
+    except Exception:
+        if required:
+            raise
+        return False
+    return True
 
 
 def handler(event, _context):
@@ -606,11 +706,21 @@ def handler(event, _context):
         return response(200, {"syncId": payload["syncId"], "idempotent": True})
 
     synced_at = now_iso()
+    for item in payload.get("completedItems", []):
+        archive_history_event(
+            user_id,
+            "REMINDER_COMPLETED",
+            item.get("modifiedAt") or synced_at,
+            {"reminder": item, "source": "APPLE_REMINDERS"},
+            item["externalId"],
+        )
     existing_reminders = TABLE.query(
         KeyConditionExpression=Key("PK").eq(partition_key) & Key("SK").begins_with("REMINDER#")
     ).get("Items", [])
     incoming_ids = {item["externalId"] for item in payload["items"]}
     for record in missing_record_updates(existing_reminders, incoming_ids, synced_at):
+        if record.get("status") == "DELETED":
+            archive_deleted_reminder(user_id, record)
         TABLE.put_item(Item=record)
 
     expires_at = int(datetime.now(timezone.utc).timestamp()) + ACTIVE_TTL_SECONDS
