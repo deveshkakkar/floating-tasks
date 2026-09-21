@@ -186,6 +186,19 @@ final class DashboardViewModel: ObservableObject {
         }
     }
 
+    func completeAllTask(_ task: SyncReminder) async {
+        guard !task.completed else { return }
+        do {
+            try await syncService.completeReminder(withID: task.externalID)
+            allTasks = allTasks.map { current in
+                guard current.id == task.id else { return current }
+                return SyncReminder(externalID: current.externalID, text: current.text, completed: true, createdAt: current.createdAt, modifiedAt: current.modifiedAt, dueAt: current.dueAt, priority: current.priority)
+            }
+        } catch {
+            allTasksError = error.localizedDescription
+        }
+    }
+
     func addReminder(text: String) async -> Bool {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {

@@ -305,8 +305,23 @@ private struct AllTasksView: View {
     var body: some View {
         List {
             ForEach(viewModel.allTasks) { task in
-                Text(task.text)
-                    .padding(.vertical, 6)
+                HStack(spacing: 12) {
+                    Button {
+                        Task { await viewModel.completeAllTask(task) }
+                    } label: {
+                        Image(systemName: task.completed ? "checkmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(task.completed ? FloatingBrainPalette.success : FloatingBrainPalette.taskAccent)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(task.completed)
+                    .accessibilityLabel(task.completed ? "Completed" : "Finish task")
+
+                    Text(task.text)
+                        .strikethrough(task.completed)
+                        .foregroundStyle(task.completed ? FloatingBrainPalette.inkSecondary : FloatingBrainPalette.ink)
+                        .padding(.vertical, 6)
+                }
             }
 
             if let error = viewModel.allTasksError {

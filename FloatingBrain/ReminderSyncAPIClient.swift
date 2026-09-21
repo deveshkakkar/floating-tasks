@@ -59,6 +59,17 @@ struct ReminderSyncAPIRequestBuilder {
         return request
     }
 
+    func buildCompleteRequest(externalID: String, accessToken: String) throws -> URLRequest {
+        guard !accessToken.isEmpty else { throw ReminderSyncAPIError.missingAccessToken }
+        let endpoint = baseURL.appendingPathComponent("v1/reminders/complete")
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(["externalId": externalID])
+        return request
+    }
+
     func buildDailyRequest(accessToken: String) throws -> URLRequest {
         guard !accessToken.isEmpty else { throw ReminderSyncAPIError.missingAccessToken }
         let endpoint = baseURL.appendingPathComponent("v1/reminders/daily")
@@ -373,6 +384,25 @@ struct ReminderSyncAPIClient: ReminderSyncService {
         var didRefreshToken = false
         while true {
             let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).buildRestoreRequest(externalID: externalID, accessToken: accessToken)
+            let (_, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { throw ReminderSyncAPIError.invalidResponse }
+            if httpResponse.statusCode == 401, !didRefreshToken, let refreshToken = tokens.refreshToken, let tokenRefresher {
+                let refreshedTokens = try await tokenRefresher.refreshAccessToken(using: refreshToken)
+                accessToken = refreshedTokens.accessToken
+                didRefreshToken = true
+                continue
+            }
+            guard (200...299).contains(httpResponse.statusCode) else { throw ReminderSyncAPIError.serverError(statusCode: httpResponse.statusCode) }
+            return
+        }
+    }
+
+    func completeReminder(withID externalID: String) async throws {
+        guard let tokens = try tokenStore.load() else { throw ReminderSyncAPIError.missingAccessToken }
+        var accessToken = tokens.accessToken
+        var didRefreshToken = false
+        while true {
+            let request = try ReminderSyncAPIRequestBuilder(baseURL: baseURL).buildCompleteRequest(externalID: externalID, accessToken: accessToken)
             let (_, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse else { throw ReminderSyncAPIError.invalidResponse }
             if httpResponse.statusCode == 401, !didRefreshToken, let refreshToken = tokens.refreshToken, let tokenRefresher {
