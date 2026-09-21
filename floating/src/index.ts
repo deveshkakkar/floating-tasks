@@ -22,6 +22,7 @@ const app = await Spectrum({
 // `app.messages` is an async iterable. Each tick yields a `space` (the
 // conversation) and an inbound `message`. Reply by awaiting `space.send(...)`.
 for await (const [space, message] of app.messages) {
+  if (message.direction === "outbound") continue;
   if (message.content.type === "text") {
     const intent = classifyMessage(message.content.text);
     if (intent.kind === "create") {
