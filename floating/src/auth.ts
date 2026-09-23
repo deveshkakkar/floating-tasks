@@ -1,3 +1,4 @@
+import { requestJSON } from "./request.ts";
 import { randomBytes } from "node:crypto";
 import { chmod, mkdir, open, readFile, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -23,7 +24,7 @@ function readMacRefreshToken(): string | null {
     const token = execFileSync(
       "security",
       ["find-generic-password", "-s", KEYCHAIN_SERVICE, "-a", KEYCHAIN_ACCOUNT, "-w"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"], timeout: 3_000 },
     ).trim();
     return token || null;
   } catch {
@@ -58,14 +59,14 @@ export async function saveRefreshToken(token: string): Promise<void> {
   await chmod(path, 0o600);
 }
 
-export async function getAccessToken(): Promise<string | null> {
+export async function getAccessToken(signal?: AbortSignal): Promise<string | null> {
   const refreshToken = process.platform === "darwin"
     ? readMacRefreshToken()
     : process.platform === "linux" ? await readLinuxRefreshToken() : null;
   if (!refreshToken) return null;
 
   try {
-    const response = await fetch(COGNITO_TOKEN_ENDPOINT, {
+    const response = await requestJSON(COGNITO_TOKEN_ENDPOINT, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
@@ -73,11 +74,10 @@ export async function getAccessToken(): Promise<string | null> {
         client_id: COGNITO_CLIENT_ID,
         refresh_token: refreshToken,
       }),
-      signal: AbortSignal.timeout(15_000),
-    });
+    }, signal);
     if (!response.ok) return null;
-    const payload = (await response.json()) as { access_token?: string };
-    return payload.access_token ?? null;
+    const payload = response.payload as { access_token?: string };
+    return typeof payload?.access_token === "string" ? payload.access_token : null;
   } catch {
     return null;
   }

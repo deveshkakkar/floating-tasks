@@ -1,12 +1,6 @@
 import { Spectrum } from "spectrum-ts";
 import { imessage } from "@spectrum-ts/imessage";
-import { classifyMessage } from "./intent.ts";
-import { queryActiveTasks } from "./query.ts";
-import { queryArchivedTasks } from "./archive.ts";
-import { restoreArchivedTask } from "./restore.ts";
-import { completeTask } from "./complete.ts";
-import { queryDailyTasks } from "./daily.ts";
-import { HELP_MESSAGE } from "./help.ts";
+import { processMessages } from "./processor.ts";
 // Spectrum bridges a single agent loop to many messaging interfaces.
 // Each provider in `providers` adds an interface (terminal TUI, iMessage, …).
 // Docs: https://photon.codes/docs/spectrum-ts
@@ -19,28 +13,15 @@ const app = await Spectrum({
   ],
 });
 
-// `app.messages` is an async iterable. Each tick yields a `space` (the
-// conversation) and an inbound `message`. Reply by awaiting `space.send(...)`.
-for await (const [space, message] of app.messages) {
-  if (message.direction === "outbound") continue;
-  if (message.content.type === "text") {
-    const intent = classifyMessage(message.content.text);
-    if (intent.kind === "create") {
-      await space.send(`Created: ${intent.text}`);
-    } else if (intent.kind === "query") {
-      await space.send(await queryActiveTasks());
-    } else if (intent.kind === "daily") {
-      await space.send(await queryDailyTasks());
-    } else if (intent.kind === "archived") {
-      await space.send(await queryArchivedTasks());
-    } else if (intent.kind === "restore") {
-      await space.send(await restoreArchivedTask(intent.target));
-    } else if (intent.kind === "complete") {
-      await space.send(await completeTask(intent.target));
-    } else if (intent.kind === "help") {
-      await space.send(HELP_MESSAGE);
-    } else {
-      await space.send(message.content.text);
-    }
-  }
+// Individual operation failures are handled without replay by the processor.
+// An iterator/provider failure remains fatal; the existing supervisor owns restart.
+try {
+  await processMessages(app.messages);
+} catch {
+  console.error("Photon: message_stream_failed");
+  process.exitCode = 1;
+  // SDK stop is not assumed cancellable; terminate after a bounded grace period.
+  const shutdown = setTimeout(() => process.exit(1), 3_000);
+  await app.stop().catch(() => {});
+  clearTimeout(shutdown);
 }

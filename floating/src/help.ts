@@ -1,6 +1,6 @@
 export const HELP_MESSAGE = [
   "I can:",
-  "• Create tasks: create a task to call Mom",
+  "• Request task creation (check with query): create a task to call Mom",
   "• Query tasks: query/fetch active tasks",
   "• See today’s selection: today",
   "• Complete tasks: complete <task ID or exact text>",

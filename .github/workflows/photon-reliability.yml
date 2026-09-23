@@ -1,0 +1,27 @@
+name: Photon offline reliability
+on:
+  push:
+    paths: ['floating/**', '.github/workflows/photon-reliability.yml']
+  pull_request:
+    paths: ['floating/**', '.github/workflows/photon-reliability.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+      - name: Install locked dependencies without lifecycle scripts
+        working-directory: floating
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Offline regression suite (no provider startup)
+        working-directory: floating
+        run: npm test
+      - name: Typecheck
+        working-directory: floating
+        run: npm run typecheck

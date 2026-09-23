@@ -1,13 +1,14 @@
+import { requestJSON } from "./request.ts";
 import { fetchActiveTasks } from "./query.ts";
 import { getAccessToken, LOGIN_REQUIRED } from "./auth.ts";
 import { API_URL } from "./config.ts";
 
-export async function completeTask(target: string): Promise<string> {
+export async function completeTask(target: string, signal?: AbortSignal): Promise<string> {
   const apiURL = API_URL;
-  const accessToken = await getAccessToken();
+  const accessToken = await getAccessToken(signal);
   if (!accessToken) return LOGIN_REQUIRED;
 
-  const result = await fetchActiveTasks();
+  const result = await fetchActiveTasks(signal);
   if (typeof result === "string") return result;
   const normalizedTarget = target.trim().toLowerCase();
   const task = result.find((item) =>
@@ -19,18 +20,18 @@ export async function completeTask(target: string): Promise<string> {
 
   try {
     const endpoint = new URL("v1/reminders/complete", `${apiURL.replace(/\/$/, "")}/`);
-    const response = await fetch(endpoint, {
+    const response = await requestJSON(endpoint, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ externalId: task.externalId }),
-    });
+    }, signal);
     if (response.status === 409) return "Complete Apple Reminders tasks in the Reminders app first.";
-    if (!response.ok) return `Completion failed with status ${response.status}.`;
+    if (!response.ok || response.status === 202) return `Completion is not confirmed (status ${response.status}). Query tasks before trying again.`;
     return `Completed: ${task.text}`;
   } catch {
-    return "Completion could not reach the task service.";
+    return "Completion could not be confirmed. It may have completed; query tasks before trying again.";
   }
 }

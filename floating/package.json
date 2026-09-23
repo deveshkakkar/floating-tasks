@@ -7,7 +7,9 @@
     "start": "node --env-file=.env --import tsx src/index.ts",
     "login": "node --env-file=.env --import tsx src/login.ts",
     "send": "node --env-file=.env --import tsx src/send-hello.ts",
-    "dev": "node --env-file=.env --import tsx --watch src/index.ts"
+    "dev": "node --env-file=.env --import tsx --watch src/index.ts",
+    "test": "node --import tsx --test src/tests/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "spectrum-ts": "^12.8.0"
