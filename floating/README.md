@@ -79,3 +79,30 @@ failed/hung sends, admission limits and truthful creation acknowledgements.
 Deploy only a reviewed candidate image, preserve the previous digest, and keep
 one connected bridge instance. Live messaging requires an explicitly selected
 recipient and test scope.
+
+## Read-only Swarm candidate (SWARM-001)
+
+`swarm status` and `swarm result <coding|batch> <task-id>` read a bounded private
+JSON snapshot. Exact `PHOTON_ALLOWED_SENDER` matching, inbound iMessage identity
+and direct-message checks precede file access. Missing identity denies silently;
+non-Swarm commands retain their existing behavior. This gate applies to Swarm
+commands only. Job submission, service control and unsolicited replies are absent.
+
+`SWARM_STATUS_FILE` must name an absolute path to an owner-only regular file
+owned by the bridge UID. Provisioning this optional setting and a read-only
+directory mount is a separate deployment step. Mount the directory, not a single
+file inode: the host publisher replaces snapshots atomically. The bridge needs
+no Docker socket, SSH key, Swarm credentials or host command execution.
+
+Health expires after 60 seconds; task metadata after 120 seconds, based on original
+observation times. Republishing cannot renew stale evidence. Unknown and partial
+observations remain explicit; completed workflows do not imply accepted code.
+Only selected counts, task IDs, runtime/outcome, duration and fake-provider markers
+are exposed; no prompts, generated output or billing data. Snapshots are rebuildable.
+
+Task lookup uses kind plus stable task ID across restarts. There is no submission,
+durable message mapping or inbox/outbox, and event redelivery may repeat a read-only
+reply. Offline tests cover denial, schema/file boundaries, freshness, restart lookup
+and legacy routing. No live recipient test, schedule or production cutover has
+been performed. Retain the prior image and use a single connected bridge instance
+when an explicitly scoped deployment and recipient test are approved.
