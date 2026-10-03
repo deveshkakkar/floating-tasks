@@ -47,3 +47,6 @@ test('slow agent request never blocks ordinary task route or starts another mode
  assert.equal(agent.route(f.space,{...f.message,id:'in-2'}),true);
  assert.equal(count,1);resolve({});await new Promise(r=>setTimeout(r,0));
 });
+test('authenticated cloud shared-pool line uses installed SDK sentinel',async()=>{
+ const f=fixture();f.space.phone='shared';await f.agent.handle(f.space,f.message);assert.equal(f.sent.length,1);
+});

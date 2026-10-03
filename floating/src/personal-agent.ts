@@ -11,7 +11,7 @@ export type Destination = {
   id?: string; __platform?: string; type?: string; phone?: string;
   send(text: string): Promise<unknown>;
 };
-type Result = { id?: string; state?: string; reply?: string; error?: string; claimed?: boolean };
+type Result = { id?: string; state?: string; reply?: string; error?: string; claimed?: boolean; ok?: boolean };
 type Call = (method: string, path: string, body?: unknown) => Promise<Result>;
 const SOCKET = "/run/personal-agent/socket/broker.sock";
 
@@ -55,7 +55,7 @@ export class PersonalAgent {
     if(typeof text !== "string" || !/^agent(?:\s|$)/i.test(text.trimStart()))return false;
     if(message.direction!=="inbound" || message.platform!=="imessage" || space.__platform!=="imessage"
       || space.type!=="dm" || message.sender?.__platform!=="imessage" || message.sender.kind==="agent"
-      || message.sender.id!==this.routing.allowed_sender || space.phone!==this.routing.bridge_number
+      || message.sender.id!==this.routing.allowed_sender || ![this.routing.bridge_number,"shared"].includes(space.phone??"")
       || !space.id || !message.id || !(message.timestamp instanceof Date)
       || !Number.isFinite(message.timestamp.getTime()) || this.now()-message.timestamp.getTime()>86400000
       || message.timestamp.getTime()-this.now()>300000 || text.length>4096)return true;
