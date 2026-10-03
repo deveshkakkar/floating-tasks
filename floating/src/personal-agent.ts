@@ -21,6 +21,7 @@ export function callBroker(method: string, path: string, body?: unknown): Promis
     const req = request({socketPath:SOCKET,path,method,headers:raw === undefined ? {} : {
       "Content-Type":"application/json","Content-Length":Buffer.byteLength(raw),
     }}, res => {
+      res.setEncoding("utf8");
       let text = "";
       res.on("data", chunk => {text += chunk;if(text.length>65536){req.destroy(Error("broker_response_capacity"));}});
       res.on("end", () => {
@@ -35,9 +36,19 @@ export function callBroker(method: string, path: string, body?: unknown): Promis
 
 export class PersonalAgent {
   private pending = new Set<Promise<unknown>>();
+  private inFlight = false;
   constructor(private routing: Routing, private call: Call = callBroker,
     private sleep = (ms: number) => new Promise<void>(r=>setTimeout(r,ms)),
     private now = Date.now) {}
+
+  route(space: Destination, message: Incoming): boolean {
+    const text=message.content.type==="text" ? message.content.text : undefined;
+    if(typeof text!=="string" || !/^agent(?:\s|$)/i.test(text.trimStart()))return false;
+    if(this.inFlight)return true;
+    this.inFlight=true;
+    void this.handle(space,message).finally(()=>{this.inFlight=false;});
+    return true;
+  }
 
   async handle(space: Destination, message: Incoming): Promise<boolean> {
     const text = message.content.type === "text" ? message.content.text : undefined;

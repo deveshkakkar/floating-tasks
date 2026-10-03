@@ -38,3 +38,12 @@ test('send failure records uncertain without retry',async()=>{
  const f=fixture();f.space.send=async()=>{throw Error('synthetic failure');};await f.agent.handle(f.space,f.message);
  assert.equal(f.calls.filter(x=>x.endsWith('/claim')).length,1);assert.equal(f.calls.filter(x=>x.endsWith('/settle')).length,1);
 });
+test('slow agent request never blocks ordinary task route or starts another model',async()=>{
+ const f=fixture();let resolve!: (value: {})=>void;let count=0;
+ const pending=new Promise<{}>(r=>{resolve=r;});
+ const agent=new PersonalAgent(routing,async()=>{count++;return pending;},async()=>{},()=>now);
+ assert.equal(agent.route(f.space,f.message),true);
+ assert.equal(agent.route(f.space,{...f.message,content:{type:'text',text:'query'}}),false);
+ assert.equal(agent.route(f.space,{...f.message,id:'in-2'}),true);
+ assert.equal(count,1);resolve({});await new Promise(r=>setTimeout(r,0));
+});

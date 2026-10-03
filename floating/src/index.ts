@@ -26,7 +26,7 @@ const app = await Spectrum({
 // conversation) and an inbound `message`. Reply by awaiting `space.send(...)`.
 for await (const [space, message] of app.messages) {
   if (message.direction === "outbound") continue;
-  if (await personalAgent.handle(space, message)) continue;
+  if (personalAgent.route(space, message)) continue;
   if (message.content.type === "text") {
     const intent = classifyMessage(message.content.text);
     if (intent.kind === "create") {
