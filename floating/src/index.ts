@@ -7,9 +7,6 @@ import { restoreArchivedTask } from "./restore.ts";
 import { completeTask } from "./complete.ts";
 import { queryDailyTasks } from "./daily.ts";
 import { HELP_MESSAGE } from "./help.ts";
-import { configuredPersonalAgent, callBroker } from "./personal-agent.ts";
-const personalAgent = configuredPersonalAgent();
-if ((await callBroker("GET", "/health")).ok !== true) throw Error("personal_agent_broker_unavailable");
 // Spectrum bridges a single agent loop to many messaging interfaces.
 // Each provider in `providers` adds an interface (terminal TUI, iMessage, …).
 // Docs: https://photon.codes/docs/spectrum-ts
@@ -26,8 +23,8 @@ const app = await Spectrum({
 // conversation) and an inbound `message`. Reply by awaiting `space.send(...)`.
 for await (const [space, message] of app.messages) {
   if (message.direction === "outbound") continue;
-  if (personalAgent.route(space, message)) continue;
   if (message.content.type === "text") {
+    if (/^agent(?:\s|$)/i.test(message.content.text.trimStart())) continue;
     const intent = classifyMessage(message.content.text);
     if (intent.kind === "create") {
       await space.send(`Created: ${intent.text}`);
