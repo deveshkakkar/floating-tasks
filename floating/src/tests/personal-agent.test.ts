@@ -69,6 +69,20 @@ test('slow agent request never blocks ordinary task route or starts another mode
  assert.equal(agent.route(f.space,{...f.message,id:'in-2'}),true);
  assert.equal(count,1);resolve({});await new Promise(r=>setTimeout(r,0));
 });
+test('agent result can arrive after fifteen minutes of polling',async()=>{
+ const f=fixture();let clock=now;let polls=0;let sends=0;
+ const agent=new PersonalAgent(routing,async(method,path)=>{
+  if(path==='/requests')return{id:'a'.repeat(64),state:'running'};
+  if(method==='GET'&&path.endsWith('a'.repeat(64))){polls++;return clock-now>=900000
+   ?{id:'a'.repeat(64),state:'done',reply:'Long task complete'}:{id:'a'.repeat(64),state:'running'};}
+  if(path.endsWith('/claim'))return{claimed:true};
+  if(path.endsWith('/settle'))return{ok:true};
+  return{};
+ },async()=>{clock+=60000;},()=>clock);
+ f.space.send=async text=>{assert.equal(text,'Long task complete');sends++;return{id:'receipt'};};
+ await agent.handle(f.space,f.message);
+ assert.equal(polls,15);assert.equal(sends,1);
+});
 test('authenticated cloud shared-pool line uses installed SDK sentinel',async()=>{
  const f=fixture();f.space.phone='shared';await f.agent.handle(f.space,f.message);assert.equal(f.sent.length,1);
 });
