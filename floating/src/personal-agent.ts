@@ -1,5 +1,6 @@
 import { request } from "node:http";
 import { readFileSync } from "node:fs";
+import { withTyping } from "./typing.ts";
 
 type Routing = { allowed_sender: string; bridge_number: string };
 export type Incoming = {
@@ -10,6 +11,8 @@ export type Incoming = {
 export type Destination = {
   id?: string; __platform?: string; type?: string; phone?: string;
   send(text: string): Promise<unknown>;
+  startTyping?: () => Promise<void>;
+  stopTyping?: () => Promise<void>;
 };
 type Result = { id?: string; state?: string; reply?: string; error?: string; claimed?: boolean; ok?: boolean };
 type Call = (method: string, path: string, body?: unknown) => Promise<Result>;
@@ -142,13 +145,17 @@ export class PersonalAgent {
       } else result=await this.call("POST",base,requestBody);
       ident=result.id;
       if(result.error || !ident){console.error("personal_agent: admission_denied");return true;}
-      const deadline=this.now()+AGENT_RESULT_TIMEOUT_MS;
-      while(result.state==="queued" || result.state==="running"){
-        if(this.now()>=deadline){console.error("personal_agent: result_uncertain");return true;}
-        await this.sleep(1000);result=await this.call("GET",base+"/"+ident);
-      }
-      if(result.state!=="done" || typeof result.reply!=="string" || !result.reply.trim())return true;
-      await this.deliver(space,result,base);
+      const complete=async()=>{
+        const deadline=this.now()+AGENT_RESULT_TIMEOUT_MS;
+        while(result.state==="queued" || result.state==="running"){
+          if(this.now()>=deadline){console.error("personal_agent: result_uncertain");return;}
+          await this.sleep(1000);result=await this.call("GET",base+"/"+ident);
+        }
+        if(result.state!=="done" || typeof result.reply!=="string" || !result.reply.trim())return;
+        await this.deliver(space,result,base);
+      };
+      if(base==="/requests")await withTyping(space,complete);
+      else await complete();
     } catch {
       console.error("personal_agent: request_or_send_uncertain");
     }
