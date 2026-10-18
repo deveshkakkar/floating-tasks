@@ -14,6 +14,7 @@ export type Destination = {
 type Result = { id?: string; state?: string; reply?: string; error?: string; claimed?: boolean; ok?: boolean };
 type Call = (method: string, path: string, body?: unknown) => Promise<Result>;
 const SOCKET = "/run/personal-agent/socket/broker.sock";
+const AGENT_RESULT_TIMEOUT_MS = 960000;
 
 export function callBroker(method: string, path: string, body?: unknown): Promise<Result> {
   return new Promise((resolve,reject) => {
@@ -141,7 +142,7 @@ export class PersonalAgent {
       } else result=await this.call("POST",base,requestBody);
       ident=result.id;
       if(result.error || !ident){console.error("personal_agent: admission_denied");return true;}
-      const deadline=this.now()+215000;
+      const deadline=this.now()+AGENT_RESULT_TIMEOUT_MS;
       while(result.state==="queued" || result.state==="running"){
         if(this.now()>=deadline){console.error("personal_agent: result_uncertain");return true;}
         await this.sleep(1000);result=await this.call("GET",base+"/"+ident);
