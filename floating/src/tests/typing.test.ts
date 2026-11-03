@@ -49,7 +49,7 @@ test('unauthorized and denied admission produce no typing',async()=>{
  const f=fixture();f.message.sender!.id='+10000000003';await f.agent.handle(f.space,f.message);
  assert.deepEqual(f.events,[]);assert.deepEqual(f.calls,[]);
  const g=fixture();const agent=new PersonalAgent(routing,async()=>({error:'denied'}));
- await agent.handle(g.space,g.message);assert.deepEqual(g.events,[]);
+ await agent.handle(g.space,g.message);assert.deepEqual(g.events,['send']);
 });
 test('controls and other conversations do not inherit owner typing',async()=>{
  const f=fixture();f.message.content.text='agent status';await f.agent.handle(f.space,f.message);

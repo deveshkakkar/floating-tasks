@@ -1,5 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {PersonalAgent,type Incoming,type Destination} from '../personal-agent.ts';
 const routing={allowed_sender:'+10000000001',bridge_number:'+10000000002'};
 const now=Date.now();
@@ -60,14 +61,105 @@ test('send failure records uncertain without retry',async()=>{
  const f=fixture();f.space.send=async()=>{throw Error('synthetic failure');};await f.agent.handle(f.space,f.message);
  assert.equal(f.calls.filter(x=>x.endsWith('/claim')).length,1);assert.equal(f.calls.filter(x=>x.endsWith('/settle')).length,1);
 });
-test('slow agent request never blocks ordinary task route or starts another model',async()=>{
+test('slow admission keeps task routing responsive and orders the next admission',async()=>{
  const f=fixture();let resolve!: (value: {})=>void;let count=0;
  const pending=new Promise<{}>(r=>{resolve=r;});
  const agent=new PersonalAgent(routing,async()=>{count++;return pending;},async()=>{},()=>now);
  assert.equal(agent.route(f.space,f.message),true);
  assert.equal(agent.route(f.space,{...f.message,content:{type:'text',text:'query'}}),false);
  assert.equal(agent.route(f.space,{...f.message,id:'in-2'}),true);
- assert.equal(count,1);resolve({});await new Promise(r=>setTimeout(r,0));
+ await new Promise(r=>setTimeout(r,0));assert.equal(count,1);
+ resolve({id:'a'.repeat(64),state:'generation_failed'});await new Promise(r=>setTimeout(r,0));assert.equal(count,2);
+});
+test('fresh bridge polls durable A/B/C replies and sends each only once in order',async()=>{
+ const sent:string[]=[];const ids=['a'.repeat(64),'b'.repeat(64),'c'.repeat(64)];let next=0;
+ const agent=new PersonalAgent(routing,async(method,path)=>{
+  if(path==='/requests/pending')return next<3?{id:ids[next],line:'shared',reply:'reply-'+next}:{};
+  if(path.endsWith('/claim'))return{claimed:true};
+  if(path.endsWith('/settle')){next++;return{ok:true};}
+  return{};
+ });
+ const resolve=async(owner:string,line:string):Promise<Destination>=>{
+  assert.equal(owner,routing.allowed_sender);assert.equal(line,'shared');
+  return{id:'any;-;'+owner,type:'dm',__platform:'imessage',phone:line,
+   send:async text=>{sent.push(text);return{id:'receipt'};}};
+ };
+ for(let i=0;i<4;i++)await agent.pollReplies(resolve);
+ assert.deepEqual(sent,['reply-0','reply-1','reply-2']);
+});
+test('bridge serializes A/B/C admission despite delayed first broker response',async()=>{
+ const f=fixture();const seen:string[]=[];let release!:(value:{id:string;state:string})=>void;
+ const first=new Promise<{id:string;state:string}>(resolve=>{release=resolve;});
+ const agent=new PersonalAgent(routing,async(method,path,body)=>{
+  if(method==='POST'&&path==='/requests'){
+   const label=(body as {text:string}).text;seen.push(label);
+   return label==='A'?first:{id:label.toLowerCase().repeat(64),state:'generation_failed'};
+  }
+  return{};
+ });
+ for(const label of ['A','B','C'])agent.route(f.space,{...f.message,id:'in-'+label,content:{type:'text',text:'agent '+label}});
+ await new Promise(r=>setTimeout(r,0));assert.deepEqual(seen,['A']);
+ release({id:'a'.repeat(64),state:'generation_failed'});
+ await new Promise(r=>setTimeout(r,0));assert.deepEqual(seen,['A','B','C']);
+});
+test('durable capacity rejection receives one claimed not-queued response',async()=>{
+ const f=fixture();let sends=0;
+ f.space.send=async text=>{sends++;assert.match(text,/not queued|could not be queued/i);return{id:'receipt'};};
+ let claimed=false;
+ const agent=new PersonalAgent(routing,async(_method,path)=>{
+  if(path==='/requests')return{id:'a'.repeat(64),state:'rejected',reply:'Your message was not queued: limit reached.'};
+  if(path.endsWith('/claim')){if(claimed)return{claimed:false};claimed=true;return{claimed:true};}
+  return{};
+ });
+ assert.equal(await agent.handle(f.space,f.message),true);
+ assert.equal(await agent.handle(f.space,f.message),true);assert.equal(sends,1);
+});
+test('retained-ledger capacity denial receives an actionable not-queued response',async()=>{
+ const f=fixture();const agent=new PersonalAgent(routing,async()=>({error:'retained_capacity_reached'}));
+ await agent.handle(f.space,f.message);assert.equal(f.sent.length,1);
+ assert.match(f.sent[0]!,/not queued/i);
+});
+test('lost admission response uses stable identity readback without replay',async()=>{
+ const f=fixture();let posts=0;let reads=0;
+ const ident=createHash('sha256').update(JSON.stringify([routing.allowed_sender,routing.bridge_number,'dm-1','in-1'])).digest('hex');
+ const agent=new PersonalAgent(routing,async(method,path)=>{
+  if(method==='POST'&&path==='/requests'){posts++;throw Error('lost response');}
+  if(method==='GET'&&path==='/requests/'+ident){reads++;return{id:ident,state:'generation_failed'};}
+  return{};
+ });
+ await agent.handle(f.space,f.message);
+ assert.equal(posts,1);assert.equal(reads,1);assert.deepEqual(f.sent,[]);
+});
+test('broker error after uncertain insert is read back, not treated as denial',async()=>{
+ const f=fixture();let posts=0;let reads=0;
+ const ident=createHash('sha256').update(JSON.stringify([routing.allowed_sender,routing.bridge_number,'dm-1','in-1'])).digest('hex');
+ const agent=new PersonalAgent(routing,async(method,path)=>{
+  if(method==='POST'&&path==='/requests'){posts++;return{error:'broker_error'};}
+  if(method==='GET'&&path==='/requests/'+ident){reads++;return{id:ident,state:'generation_failed'};}
+  return{};
+ });
+ await agent.handle(f.space,f.message);
+ assert.equal(posts,1);assert.equal(reads,1);assert.deepEqual(f.sent,[]);
+});
+test('admission readback identity matches broker JSON for Unicode provider IDs',async()=>{
+ const f=fixture();f.space.id='dm-☃';f.message.id='msg-😀';let path='';
+ const agent=new PersonalAgent(routing,async(method,route)=>{
+  if(method==='POST')throw Error('lost response');
+  path=route;return{id:'ee2161767c9b11cd0c5d3b9f2f3973a690b6976de8282058890483d672b758a1',state:'generation_failed'};
+ });
+ await agent.handle(f.space,f.message);
+ assert.equal(path,'/requests/ee2161767c9b11cd0c5d3b9f2f3973a690b6976de8282058890483d672b758a1');
+});
+test('unconfirmed admission is reported without asserting it was not queued',async()=>{
+ const f=fixture();let posts=0;let reads=0;
+ const agent=new PersonalAgent(routing,async(method,path)=>{
+  if(method==='POST'&&path==='/requests'){posts++;throw Error('socket unavailable');}
+  if(method==='GET'&&path.startsWith('/requests/')){reads++;return{error:'not_found'};}
+  return{};
+ });
+ await agent.handle(f.space,f.message);
+ assert.equal(posts,2);assert.equal(reads,2);
+ assert.equal(f.sent.length,1);assert.match(f.sent[0]!,/could not confirm whether/i);
 });
 test('agent result can arrive after fifteen minutes of polling',async()=>{
  const f=fixture();let clock=now;let polls=0;let sends=0;

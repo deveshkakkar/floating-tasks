@@ -15,6 +15,9 @@ const ownerPlatform=imessage(app);
 const weeklyPoll=setInterval(()=>void personalAgent.pollWeekly((owner,line)=>
   ownerPlatform.space.get("any;-;"+owner,{phone:line})),15000);
 weeklyPoll.unref();
+const replyPoll=setInterval(()=>void personalAgent.pollReplies((owner,line)=>
+  ownerPlatform.space.get("any;-;"+owner,{phone:line})),5000);
+replyPoll.unref();
 
 for await (const [space,message] of app.messages) {
   if (message.direction === "outbound") continue;
