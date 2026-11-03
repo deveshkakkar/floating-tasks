@@ -1,4 +1,5 @@
 import { request } from "node:http";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { withTyping } from "./typing.ts";
 
@@ -14,7 +15,7 @@ export type Destination = {
   startTyping?: () => Promise<void>;
   stopTyping?: () => Promise<void>;
 };
-type Result = { id?: string; state?: string; reply?: string; error?: string; claimed?: boolean; ok?: boolean };
+type Result = { id?: string; state?: string; reply?: string; line?: string; error?: string; claimed?: boolean; ok?: boolean };
 type Call = (method: string, path: string, body?: unknown) => Promise<Result>;
 const SOCKET = "/run/personal-agent/socket/broker.sock";
 const AGENT_RESULT_TIMEOUT_MS = 960000;
@@ -40,12 +41,14 @@ export function callBroker(method: string, path: string, body?: unknown): Promis
 
 export class PersonalAgent {
   private pending = new Set<Promise<unknown>>();
-  private inFlight = false;
+  private activeRequests = 0;
+  private pollingReplies = false;
   private controlInFlight = false;
   private deliveryTail: Promise<void> = Promise.resolve();
   private queuedDeliveries = 0;
   private queuedControls = 0;
   private controlAdmissionTail: Promise<void> = Promise.resolve();
+  private requestAdmissionTail: Promise<void> = Promise.resolve();
   constructor(private routing: Routing, private call: Call = callBroker,
     private sleep = (ms: number) => new Promise<void>(r=>setTimeout(r,ms)),
     private now = Date.now, private dedicated = false) {}
@@ -54,6 +57,34 @@ export class PersonalAgent {
     const value=text.trim();
     if(!this.dedicated && !/^agent(?:\s|$)/i.test(value))return undefined;
     return /^agent(?:\s|$)/i.test(value) ? value.slice(5).trim() : value;
+  }
+
+  private async admitRequest(body: {sender:string;line:string;spaceId:string;messageId:string;text:string}): Promise<Result> {
+    const identity=JSON.stringify([body.sender,body.line,body.spaceId,body.messageId])
+      .replace(/[\u007f-\uffff]/g,c=>"\\u"+c.charCodeAt(0).toString(16).padStart(4,"0"));
+    const ident=createHash("sha256").update(identity).digest("hex");
+    const definiteDenial=(value:Result)=>["agent_deploying","retained_capacity_reached","identity_denied",
+      "invalid_request","missing_message_identity","invalid_text","invalid_body"].includes(value.error??"");
+    try {
+      const first=await this.call("POST","/requests",body);
+      if(first.id || definiteDenial(first))return first;
+    } catch {}
+    // Admission is an idempotent ledger insert, not a model execution. Read
+    // back before one bounded retry; the same provider identity cannot dispatch
+    // a second turn even if the first POST committed before its reply was lost.
+    try {
+      const found=await this.call("GET","/requests/"+ident);
+      if(found.id===ident)return found;
+    } catch {}
+    try {
+      const second=await this.call("POST","/requests",body);
+      if(second.id || definiteDenial(second))return second;
+    } catch {}
+    try {
+      const found=await this.call("GET","/requests/"+ident);
+      if(found.id===ident)return found;
+    } catch {}
+    return {error:"admission_unconfirmed"};
   }
 
   private async deliver(space: Destination, result: Result, base: string): Promise<void> {
@@ -86,9 +117,32 @@ export class PersonalAgent {
     } finally {this.queuedDeliveries--;release();}
   }
 
+  private async notifyNotQueued(space: Destination, reason?: string): Promise<void> {
+    const message=reason==="request_budget_reached" ? "Your message was not queued: the agent request limit is reached. Please try later."
+      : reason==="retained_capacity_reached" ? "Your message was not queued: the agent ledger needs operator attention."
+      : reason==="agent_deploying" ? "Your message was not queued while the agent is updating. Please try again after it returns."
+      : "I could not confirm whether your message was queued. Check agent status before resending.";
+    const previous=this.deliveryTail;
+    let release!:()=>void;
+    this.deliveryTail=new Promise<void>(resolve=>{release=resolve;});
+    try {
+      await previous;
+      if(this.pending.size)throw Error("previous_send_uncertain");
+      const sending=Promise.resolve().then(()=>space.send(message));
+      this.pending.add(sending);
+      void sending.then(()=>this.pending.delete(sending),()=>this.pending.delete(sending));
+      let timer:ReturnType<typeof setTimeout>|undefined;
+      const receipt=await Promise.race([sending,new Promise((_,reject)=>{
+        timer=setTimeout(()=>reject(Error("send_uncertain")),15000);
+      })]).finally(()=>{if(timer)clearTimeout(timer);});
+      if(typeof receipt!=="object" || receipt===null || typeof (receipt as {id?:unknown}).id!=="string")
+        throw Error("send_not_confirmed");
+    } catch {console.error("personal_agent: admission_notice_uncertain");}
+    finally {release();}
+  }
+
   async pollWeekly(resolveOwner: (owner: string, line: string) => Promise<Destination>): Promise<void> {
-    if(this.inFlight || this.controlInFlight || this.pending.size)return;
-    this.inFlight=true;
+    if(this.activeRequests || this.controlInFlight || this.pending.size)return;
     try {
       const result=await this.call("GET","/weekly/pending");
       if(!result.id || typeof result.reply!=="string" || !result.reply.trim())return;
@@ -97,7 +151,21 @@ export class PersonalAgent {
         || ![this.routing.bridge_number,"shared"].includes(space.phone??""))throw Error("weekly_destination_denied");
       await this.deliver(space,result,"/weekly");
     } catch {console.error("personal_agent: weekly_delivery_uncertain");}
-    finally {this.inFlight=false;}
+  }
+
+  async pollReplies(resolveOwner: (owner: string, line: string) => Promise<Destination>): Promise<void> {
+    if(this.pollingReplies || this.pending.size)return;
+    this.pollingReplies=true;
+    try {
+      const result=await this.call("GET","/requests/pending");
+      if(!result.id || typeof result.reply!=="string" || !result.reply.trim())return;
+      if(![this.routing.bridge_number,"shared"].includes(result.line??""))throw Error("reply_line_denied");
+      const space=await resolveOwner(this.routing.allowed_sender,result.line!);
+      if(space.id!=="any;-;"+this.routing.allowed_sender || space.__platform!=="imessage" || space.type!=="dm"
+        || ![this.routing.bridge_number,"shared"].includes(space.phone??""))throw Error("reply_destination_denied");
+      await this.deliver(space,result,"/requests");
+    } catch {console.error("personal_agent: reply_delivery_uncertain");}
+    finally {this.pollingReplies=false;}
   }
 
   route(space: Destination, message: Incoming): boolean {
@@ -113,9 +181,8 @@ export class PersonalAgent {
       void this.handle(space,message).finally(()=>{this.queuedControls--;this.controlInFlight=this.queuedControls>0;});
       return true;
     }
-    if(this.inFlight)return true;
-    this.inFlight=true;
-    void this.handle(space,message).finally(()=>{this.inFlight=false;});
+    this.activeRequests++;
+    void this.handle(space,message).finally(()=>{this.activeRequests--;});
     return true;
   }
 
@@ -132,26 +199,33 @@ export class PersonalAgent {
       || message.timestamp.getTime()-this.now()>300000 || text.length>4096)return true;
     if(!body)return true;
     const base=["status","pause background","resume background"].includes(body.toLowerCase())?"/controls":"/requests";
-    if(this.pending.size && base!=="/controls"){console.error("personal_agent: send_capacity_busy");return true;}
     let ident: string|undefined;
     try {
-      const requestBody={sender:message.sender.id,line:space.phone,
-        spaceId:space.id,messageId:message.id,text:body};
+      const requestBody={sender:message.sender.id,line:space.phone!,
+        spaceId:space.id!,messageId:message.id!,text:body};
       let result:Result;
       if(base==="/controls"){
         const admission=this.controlAdmissionTail.then(()=>this.call("POST",base,requestBody));
         this.controlAdmissionTail=admission.then(()=>undefined,()=>undefined);
         result=await admission;
-      } else result=await this.call("POST",base,requestBody);
+      } else {
+        const admission=this.requestAdmissionTail.then(()=>this.admitRequest(requestBody));
+        this.requestAdmissionTail=admission.then(()=>undefined,()=>undefined);
+        result=await admission;
+      }
       ident=result.id;
-      if(result.error || !ident){console.error("personal_agent: admission_denied");return true;}
+      if(result.error || !ident){
+        console.error("personal_agent: admission_denied");
+        if(base==="/requests")await this.notifyNotQueued(space,result.error);
+        return true;
+      }
       const complete=async()=>{
         const deadline=this.now()+AGENT_RESULT_TIMEOUT_MS;
         while(result.state==="queued" || result.state==="running"){
           if(this.now()>=deadline){console.error("personal_agent: result_uncertain");return;}
           await this.sleep(1000);result=await this.call("GET",base+"/"+ident);
         }
-        if(result.state!=="done" || typeof result.reply!=="string" || !result.reply.trim())return;
+        if(!["done","rejected"].includes(result.state??"") || typeof result.reply!=="string" || !result.reply.trim())return;
         await this.deliver(space,result,base);
       };
       if(base==="/requests")await withTyping(space,complete);
