@@ -60,6 +60,10 @@ xcodebuild -project FloatingBrain.xcodeproj -scheme FloatingBrain \
 
 Task text leaves the device when you sync or capture to the cloud. Sync also sends completion events, including completed reminder text, for history. Widgets, notification previews, local caches, and optional messaging integrations can expose that text on other surfaces. DynamoDB expiry is asynchronous, and the archive bucket is retained without an expiry policy by default. See [SECURITY.md](SECURITY.md) for data handling, retention, and private reporting guidance.
 
-Before publishing or distributing a deployment, work through the [public release checklist](docs/public-release.md). There is currently **no project license**; the owner must choose one or explicitly decide on source-available publication before presenting this as an open-source project. Third-party material is identified separately in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Before publishing or distributing a deployment, work through the [public release checklist](docs/public-release.md).
 
 Development guidance is in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## License
+
+Floating Brain is licensed under the [MIT License](LICENSE). Third-party material retains its own licenses and notices, as described in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

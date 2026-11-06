@@ -4,8 +4,8 @@ This checklist covers publishing the repository and preparing a development inst
 
 ## Owner decisions before changing visibility
 
-- [ ] Choose a project license and add its actual text, or deliberately publish as source-available without describing the project as open source. Check [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) when making that choice.
-- [ ] Review the personal author/committer email addresses that remain in Git history and decide whether to publish them. Changing the current files does not rewrite historical metadata.
+- [x] The owner selected the [MIT License](../LICENSE) on 2026-11-06. Third-party licenses and notices remain in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+- [x] The owner chose to retain the existing Git history on 2026-11-06, including the previously reviewed personal author/committer email metadata. No history rewrite or clean-history copy is planned.
 - [ ] Review the branches, pull requests, issues, workflow logs/artifacts, images, and other material that will become visible. Confirm rights to distribute code and assets, including any later additions.
 - [ ] Decide whether the initial publication is source only or includes installable artifacts. Keep the experimental status and supported setup clear.
 - [ ] Confirm the final commit and repository visibility change explicitly. Merging a preparation branch alone does not publish the repository.
@@ -14,7 +14,7 @@ This checklist covers publishing the repository and preparing a development inst
 
 The preparation review began at master commit `54a06391635d729a77292895c52a74f698fef51b`. The inspected history comprised five original branches, 52 reachable commits, 49 distinct trees, and 260 distinct text blobs. A checksum-verified Gitleaks 8.30.1 scan covered historical text, commit/discussion metadata, five complete Actions logs, and the working tree. It reported no credential findings in that inspected material.
 
-This is a bounded review, not a guarantee. It does not prove that every external artifact, deleted/unreachable object, private deployment, or provider account is free of sensitive information. Personal email metadata remains a publication decision. Nonsecret historical deployment identifiers are not, by themselves, evidence of a credential leak.
+This is a bounded review, not a guarantee. It does not prove that every external artifact, deleted/unreachable object, private deployment, or provider account is free of sensitive information. The owner chose to retain the reviewed history and its email metadata on 2026-11-06. Nonsecret historical deployment identifiers are not, by themselves, evidence of a credential leak.
 
 ## Source publication checks
 

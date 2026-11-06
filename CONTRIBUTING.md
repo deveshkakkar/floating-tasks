@@ -1,6 +1,6 @@
 # Contributing
 
-Floating Brain is an experimental personal project. The project license has not yet been selected. Please resolve licensing with the maintainer before submitting code intended for redistribution. Third-party licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+Floating Brain is an experimental personal project licensed under the [MIT License](LICENSE). Contributions are covered by the same license. Third-party licenses and notices are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Development workflow
 

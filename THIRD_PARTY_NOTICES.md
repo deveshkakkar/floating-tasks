@@ -1,7 +1,7 @@
 # Third-party components
 
-This file records third-party sources. It does not select a license for the
-Floating Brain application; see the license status in the [README](README.md).
+Floating Brain is licensed under the [MIT License](LICENSE). This file records
+third-party sources, which retain their own licenses and notices.
 
 | Component | Source | License information |
 | --- | --- | --- |
