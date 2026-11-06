@@ -16,17 +16,18 @@ final class ReminderSyncAPIClientTests: XCTestCase {
         XCTAssertTrue(String(decoding: request.httpBody ?? Data(), as: UTF8.self).contains("Think"))
     }
 
-    func testRequestOmitsCompletedReminders() throws {
+    func testRequestSeparatesActiveRemindersFromCompletionHistory() throws {
         let active = SyncReminder(externalID: "active", text: "Keep", completed: false, createdAt: nil, modifiedAt: nil, dueAt: nil, priority: 0)
         let completed = SyncReminder(externalID: "completed", text: "Done", completed: true, createdAt: nil, modifiedAt: nil, dueAt: nil, priority: 0)
         let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).build(
             reminders: [active, completed], listName: "Floating Brain", accessToken: "access-token"
         )
 
-        let body = String(decoding: request.httpBody ?? Data(), as: UTF8.self)
-        XCTAssertTrue(body.contains("active"))
-        XCTAssertFalse(body.contains("completed"))
-        XCTAssertFalse(body.contains("Done"))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let body = try decoder.decode(ReminderSyncRequest.self, from: XCTUnwrap(request.httpBody))
+        XCTAssertEqual(body.items, [active])
+        XCTAssertEqual(body.completedItems, [completed])
     }
 
     func testEmptyAccessTokenIsRejectedBeforeCreatingRequest() {
@@ -60,13 +61,20 @@ final class ReminderSyncAPIClientTests: XCTestCase {
     }
 
     func testActiveRequestSupportsPaginationParameters() throws {
+        let cursor = "cursor/value?part=1&next=%23#section with space"
         let request = try ReminderSyncAPIRequestBuilder(baseURL: URL(string: "https://api.example.com")!).buildActiveRequest(
             accessToken: "access-token",
             limit: 25,
-            cursor: "cursor/value"
+            cursor: cursor
         )
 
-        XCTAssertEqual(request.url?.absoluteString, "https://api.example.com/v1/reminders/active?limit=25&cursor=cursor%2Fvalue")
+        let components = try XCTUnwrap(URLComponents(url: XCTUnwrap(request.url), resolvingAgainstBaseURL: false))
+        XCTAssertEqual(components.path, "/v1/reminders/active")
+        XCTAssertEqual(components.queryItems, [
+            URLQueryItem(name: "limit", value: "25"),
+            URLQueryItem(name: "cursor", value: cursor)
+        ])
+        XCTAssertNil(components.fragment)
     }
 
     func testArchivedRequestUsesAuthenticatedReadEndpoint() throws {
