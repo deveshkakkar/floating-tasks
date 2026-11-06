@@ -7,7 +7,7 @@
 	<key>CFBundleExecutable</key>
 	<string>FloatingBrain</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.floatingbrain.app</string>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>FloatingBrain</string>
 	<key>CFBundlePackageType</key>
@@ -33,7 +33,15 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSRemindersUsageDescription</key>
+	<key>FLOATING_BRAIN_API_URL</key>
+	<string>$(FLOATING_BRAIN_API_URL)</string>
+	<key>COGNITO_AUTHORIZATION_ENDPOINT</key>
+	<string>$(COGNITO_AUTHORIZATION_ENDPOINT)</string>
+	<key>COGNITO_TOKEN_ENDPOINT</key>
+	<string>$(COGNITO_TOKEN_ENDPOINT)</string>
+	<key>COGNITO_CLIENT_ID</key>
+	<string>$(COGNITO_CLIENT_ID)</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
 	<string>Floating Brain uses your Floating Brain reminders to synchronize them to your private dashboard.</string>
 	<key>UILaunchScreen</key>
 	<dict/>

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { saveRefreshToken } from "./auth.ts";
 import {
@@ -6,12 +6,12 @@ import {
   COGNITO_CLIENT_ID,
   COGNITO_REDIRECT_URI,
   COGNITO_TOKEN_ENDPOINT,
+  validateOAuthConfiguration,
 } from "./config.ts";
+import { loopbackCallback, matchesOAuthState } from "./login-security.ts";
 
-const redirectURI = new URL(COGNITO_REDIRECT_URI);
-if (redirectURI.protocol !== "http:" || redirectURI.hostname !== "127.0.0.1" || redirectURI.pathname !== "/callback") {
-  throw new Error("Cognito callback must use the configured loopback HTTP callback");
-}
+validateOAuthConfiguration();
+const redirectURI = loopbackCallback(COGNITO_REDIRECT_URI, process.env.COGNITO_CALLBACK_BIND);
 
 const verifier = randomBytes(32).toString("base64url");
 const expectedState = randomBytes(32).toString("base64url");
@@ -29,7 +29,14 @@ authorizationURL.search = new URLSearchParams({
 
 let handledCallback = false;
 const server = createServer(async (request, response) => {
-  const requestURL = new URL(request.url ?? "/", redirectURI);
+  let requestURL: URL;
+  try {
+    requestURL = new URL(request.url ?? "/", redirectURI);
+  } catch {
+    response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+    response.end("Invalid callback URL.");
+    return;
+  }
   if (request.method !== "GET" || requestURL.pathname !== redirectURI.pathname) {
     response.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     response.end("Not found.");
@@ -41,14 +48,17 @@ const server = createServer(async (request, response) => {
     response.end("This login callback was already used.");
     return;
   }
-  handledCallback = true;
-
   const receivedState = requestURL.searchParams.get("state") ?? "";
-  const stateMatches = receivedState.length === expectedState.length &&
-    timingSafeEqual(Buffer.from(receivedState), Buffer.from(expectedState));
+  const stateMatches = matchesOAuthState(receivedState, expectedState);
   const code = requestURL.searchParams.get("code");
   const providerError = requestURL.searchParams.has("error");
-  if (!stateMatches || !code || providerError) {
+  if (!stateMatches) {
+    response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
+    response.end("Invalid login state.");
+    return; // An unrelated request must not consume the pending login.
+  }
+  handledCallback = true;
+  if (!code || providerError) {
     response.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
     response.end("Cognito login failed or was cancelled. Restart the login command and try again.");
     server.close();
@@ -60,6 +70,7 @@ const server = createServer(async (request, response) => {
   try {
     const tokenResponse = await fetch(COGNITO_TOKEN_ENDPOINT, {
       method: "POST",
+      redirect: "error",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "authorization_code",
@@ -72,7 +83,7 @@ const server = createServer(async (request, response) => {
     });
     if (!tokenResponse.ok) throw new Error("Token exchange was rejected");
     const payload = await tokenResponse.json() as { refresh_token?: string };
-    if (!payload.refresh_token) throw new Error("No refresh token was returned");
+    if (typeof payload.refresh_token !== "string" || !payload.refresh_token) throw new Error("No refresh token was returned");
     await saveRefreshToken(payload.refresh_token);
     response.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
     response.end("Login complete. You can close this window.");
@@ -90,8 +101,8 @@ const server = createServer(async (request, response) => {
 server.headersTimeout = 10_000;
 server.requestTimeout = 20_000;
 server.listen(
-  Number(redirectURI.port || 8765),
-  process.env.COGNITO_CALLBACK_BIND ?? redirectURI.hostname,
+  Number(redirectURI.port || 80),
+  redirectURI.hostname,
   () => {
     console.log("Open this URL in a browser on the client with the localhost SSH tunnel:");
     console.log(authorizationURL.toString());

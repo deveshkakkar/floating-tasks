@@ -16,6 +16,8 @@ export async function queryDailyTasks(): Promise<string> {
   try {
     const endpoint = new URL("v1/reminders/daily", `${apiURL.replace(/\/$/, "")}/`);
     const response = await fetch(endpoint, {
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) return `Daily lookup failed with status ${response.status}.`;

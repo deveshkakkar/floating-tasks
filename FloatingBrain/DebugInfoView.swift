@@ -44,7 +44,7 @@ struct DebugInfoView: View {
             }
 
             Section("Deployment") {
-                DebugRow(title: "Sync API", value: FloatingBrainEnvironment.syncAPIBaseURL.absoluteString)
+                DebugRow(title: "Sync API", value: FloatingBrainEnvironment.syncAPIBaseURL?.absoluteString ?? "Not configured")
                 DebugRow(title: "Cognito", value: FloatingBrainEnvironment.cognitoConfiguration == nil ? "Not configured" : "Configured")
                 DebugRow(title: "Callback", value: FloatingBrainEnvironment.callbackURL)
             }
@@ -142,7 +142,7 @@ struct DebugInfoView: View {
             "Pending request: \(pendingTask)",
             "Last schedule: \(BackgroundSyncScheduler.lastScheduleDescription)",
             "Last schedule error: \(BackgroundSyncScheduler.lastErrorDescription)",
-            "Sync API: \(FloatingBrainEnvironment.syncAPIBaseURL.absoluteString)",
+            "Sync API: \(FloatingBrainEnvironment.syncAPIBaseURL?.absoluteString ?? "Not configured")",
             "Cognito: \(FloatingBrainEnvironment.cognitoConfiguration == nil ? "Not configured" : "Configured")",
             "Backend: \(viewModel.backendDiagnostics.state.rawValue) — \(viewModel.backendDiagnostics.message)",
             "Backend checked: \(backendCheckedDescription)",

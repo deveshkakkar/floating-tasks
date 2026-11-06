@@ -1,4 +1,5 @@
 import importlib.util
+import base64
 import hashlib
 import hmac
 import json
@@ -6,6 +7,7 @@ import os
 import pathlib
 import time
 import unittest
+from unittest.mock import patch
 
 
 MODULE_PATH = pathlib.Path(__file__).parents[1] / "lambda" / "app.py"
@@ -228,6 +230,43 @@ class PhotonWebhookTests(unittest.TestCase):
         self.assertEqual(second["body"], '{"captured": 0, "idempotent": true}')
         self.assertEqual(table.calls, 1)
 
+    def test_rejects_malformed_signature_without_crashing(self):
+        for signature in ("é" * 67, "v0=" + "z" * 64, "v0=short", None, []):
+            with self.subTest(signature=signature):
+                event = self.event(self.payload())
+                event["headers"]["x-spectrum-signature"] = signature
+                self.assertEqual(APP.handler(event, None)["statusCode"], 401)
+
+    def test_rejects_expired_or_malformed_signature_timestamp(self):
+        for timestamp in (str(int(time.time()) - 600), "١٢٣", "1e10", [], None):
+            with self.subTest(timestamp=timestamp):
+                event = self.event(self.payload())
+                event["headers"]["x-spectrum-timestamp"] = timestamp
+                self.assertEqual(APP.handler(event, None)["statusCode"], 401)
+
+    def test_rejects_invalid_message_fields_before_storage(self):
+        for field, value in (("timestamp", {}), ("timestamp", "not-a-date"), ("id", "x" * 1024)):
+            with self.subTest(field=field, value=value), patch.object(APP, "TABLE", NoStorageAccess()):
+                payload = self.payload()
+                payload["message"][field] = value
+                self.assertEqual(APP.handler(self.event(payload), None)["statusCode"], 400)
+
+    def test_missing_allowed_sender_fails_closed(self):
+        APP.os.environ["PHOTON_ALLOWED_SENDER"] = ""
+        payload = self.payload()
+        payload["message"]["sender"]["id"] = ""
+        self.assertEqual(APP.handler(self.event(payload), None)["statusCode"], 403)
+
+    def test_signed_deeply_nested_json_is_rejected(self):
+        event = self.event(self.payload())
+        event["body"] = "[" * 2000 + "0" + "]" * 2000
+        timestamp = event["headers"]["x-spectrum-timestamp"]
+        event["headers"]["x-spectrum-signature"] = "v0=" + hmac.new(
+            self.secret.encode(), f"v0:{timestamp}:{event['body']}".encode(), hashlib.sha256
+        ).hexdigest()
+        with patch.object(APP, "TABLE", NoStorageAccess()):
+            self.assertEqual(APP.handler(event, None)["statusCode"], 400)
+
 
 class RequestParsingTests(unittest.TestCase):
     def test_completed_items_are_removed_from_sync_payload(self):
@@ -247,6 +286,131 @@ class RequestParsingTests(unittest.TestCase):
         })
 
         self.assertEqual([item["externalId"] for item in payload["completedItems"]], ["done"])
+
+
+class NoStorageAccess:
+    def __getattr__(self, name):
+        raise AssertionError(f"invalid request must not access storage: {name}")
+
+
+class RequestValidationTests(unittest.TestCase):
+    routes = ("POST /reminders/sync", "POST /reminders/restore", "POST /reminders/complete", "POST /items/capture")
+
+    def event(self, route, body, encoded=False):
+        return {
+            "routeKey": route,
+            "requestContext": {"authorizer": {"jwt": {"claims": {"sub": "u"}}}},
+            "body": body,
+            "isBase64Encoded": encoded,
+        }
+
+    def assert_rejected_without_storage(self, event):
+        with patch.object(APP, "TABLE", NoStorageAccess()), patch.object(APP, "S3", NoStorageAccess()):
+            self.assertEqual(APP.handler(event, None)["statusCode"], 400)
+
+    def test_json_body_must_be_an_object_for_every_mutation_route(self):
+        for route in self.routes:
+            for payload in ([], [1], None, "text", 7, True):
+                with self.subTest(route=route, payload=payload):
+                    self.assert_rejected_without_storage(self.event(route, json.dumps(payload)))
+
+    def test_malformed_oversized_and_non_string_bodies_are_rejected(self):
+        for route in self.routes:
+            for body in ("{", "x" * (APP.MAX_BODY_BYTES + 1), {}, [], "\ud800", "[" * 2000 + "0" + "]" * 2000):
+                with self.subTest(route=route, body_type=type(body).__name__, size=len(body)):
+                    self.assert_rejected_without_storage(self.event(route, body))
+
+    def test_base64_bodies_are_strictly_decoded_and_bounded(self):
+        for route in self.routes:
+            for body in ("not base64!!", base64.b64encode(b"\xff").decode(), "A" * (4 * ((APP.MAX_BODY_BYTES + 2) // 3) + 4)):
+                with self.subTest(route=route, size=len(body)):
+                    self.assert_rejected_without_storage(self.event(route, body, encoded=True))
+
+    def test_sync_validates_every_item_before_any_storage_access(self):
+        valid = {"externalId": "r1", "text": "Keep", "completed": False, "priority": 1}
+        invalid_fields = [
+            ("priority", value) for value in (True, False, "1", None, -1, 10, 1.5, float("nan"), float("inf"))
+        ] + [
+            (field, value)
+            for field in ("createdAt", "modifiedAt", "dueAt")
+            for value in (5, {}, [], "", "not-a-date", "2026-08-01", "2026-02-30T00:00:00Z")
+        ] + [("externalId", "x" * 1024), ("externalId", "é" * 500), ("text", "\ud800")]
+        for field, value in invalid_fields:
+            invalid = {**valid, "externalId": "r2", field: value}
+            payload = {"syncId": "s1", "listName": "Floating Brain", "items": [valid, invalid]}
+            with self.subTest(field=field, value=value):
+                self.assert_rejected_without_storage(self.event(self.routes[0], json.dumps(payload)))
+
+    def test_completed_items_are_validated_before_archiving(self):
+        payload = {
+            "syncId": "s1", "listName": "Floating Brain", "items": [],
+            "completedItems": [{"externalId": "done", "text": "Done", "completed": True, "modifiedAt": {}}],
+        }
+        self.assert_rejected_without_storage(self.event(self.routes[0], json.dumps(payload)))
+
+    def test_sync_accepts_optional_dates_and_integer_priority_range(self):
+        for priority in range(10):
+            item = {
+                "externalId": "r1", "text": "Keep", "completed": False, "priority": priority,
+                "createdAt": "2026-08-01T00:00:00Z", "modifiedAt": "2026-08-01T01:30:00.123456+01:30", "dueAt": None,
+            }
+            payload = {"syncId": "s1", "listName": "Floating Brain", "items": [item]}
+            with self.subTest(priority=priority):
+                parsed = APP.parse_request(self.event(self.routes[0], json.dumps(payload)))
+                self.assertEqual(parsed["items"], [item])
+
+    def test_capture_validates_all_timestamps_before_writing(self):
+        valid = {"id": "a-b", "text": "Capture", "capturedAt": "2026-08-01T00:00:00Z"}
+        for value in (None, 1, {}, [], "", "not-a-date", "2026-02-30T00:00:00Z"):
+            with self.subTest(value=value):
+                payload = {"items": [valid, {**valid, "id": "c-d", "capturedAt": value}]}
+                self.assert_rejected_without_storage(self.event(self.routes[3], json.dumps(payload)))
+
+    def test_valid_base64_capture_is_accepted(self):
+        class Table:
+            def put_item(self, Item):
+                self.item = Item
+
+        payload = {"items": [{"id": "a-b", "text": "Capture", "capturedAt": "2026-08-01T00:00:00Z"}]}
+        encoded = base64.b64encode(json.dumps(payload).encode()).decode()
+        table = Table()
+        with patch.object(APP, "TABLE", table):
+            result = APP.handler(self.event(self.routes[3], encoded, encoded=True), None)
+        self.assertEqual(result["statusCode"], 200)
+        self.assertEqual(table.item["SK"], "REMINDER#capture:ab")
+
+    def test_restore_and_complete_reject_oversized_identifiers(self):
+        for route in self.routes[1:3]:
+            with self.subTest(route=route):
+                self.assert_rejected_without_storage(self.event(route, json.dumps({"externalId": "x" * 1024})))
+
+    def test_active_cursor_cannot_change_user_or_entity_partition(self):
+        for key in (
+            {"PK": "USER#another", "SK": "REMINDER#r1"},
+            {"PK": "USER#u", "SK": "SYNC#STATE"},
+            {"PK": "USER#u", "SK": "DAILY#2026-08-01"},
+            {"PK": "USER#u", "SK": "REMINDER#r1", "extra": "value"},
+            {"PK": "USER#u", "SK": "REMINDER#" + "x" * 1024},
+        ):
+            event = self.event("GET /reminders/active", None)
+            event["queryStringParameters"] = {"cursor": APP.encode_cursor(key)}
+            with self.subTest(key=key):
+                self.assert_rejected_without_storage(event)
+
+    def test_active_cursor_rejects_malformed_encoding(self):
+        for cursor in ("", "é", "x" * 4097, [], 7, "%%%"):
+            event = self.event("GET /reminders/active", None)
+            event["queryStringParameters"] = {"cursor": cursor}
+            with self.subTest(cursor=cursor):
+                self.assert_rejected_without_storage(event)
+
+    def test_active_cursor_rejects_deeply_nested_json_before_storage(self):
+        raw_cursor = "[" * 1500 + "]" * 1500
+        cursor = base64.urlsafe_b64encode(raw_cursor.encode()).decode().rstrip("=")
+        self.assertLessEqual(len(cursor), 4096)
+        event = self.event("GET /reminders/active", None)
+        event["queryStringParameters"] = {"cursor": cursor}
+        self.assert_rejected_without_storage(event)
 
 
 class ActiveReminderTests(unittest.TestCase):

@@ -1,0 +1,9 @@
+// A fresh checkout has no cloud destination or signing identity.
+FLOATING_BRAIN_API_URL =
+COGNITO_AUTHORIZATION_ENDPOINT =
+COGNITO_TOKEN_ENDPOINT =
+COGNITO_CLIENT_ID =
+DEVELOPMENT_TEAM =
+
+// Optional, machine-local values. Never add this file to Git.
+#include? "Local.xcconfig"

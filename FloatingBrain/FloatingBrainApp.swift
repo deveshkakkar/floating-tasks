@@ -16,7 +16,8 @@ struct FloatingBrainApp: App {
             initialState.authentication = .signedIn
         }
 
-        if let configuration = FloatingBrainEnvironment.cognitoConfiguration {
+        if let deployment = FloatingBrainEnvironment.deployment {
+            let configuration = deployment.cognitoConfiguration
             let authenticator = CognitoWebAuthenticator(
                 requestBuilder: CognitoAuthorizationRequestBuilder(configuration: configuration),
                 callbackURLScheme: FloatingBrainEnvironment.callbackURLScheme,
@@ -28,7 +29,7 @@ struct FloatingBrainApp: App {
                 tokenExchanger: tokenClient
             )
             let syncService: any ReminderSyncService = ReminderSyncAPIClient(
-                baseURL: FloatingBrainEnvironment.syncAPIBaseURL,
+                baseURL: deployment.syncAPIBaseURL,
                 tokenStore: tokenStore,
                 tokenRefresher: tokenClient
             )

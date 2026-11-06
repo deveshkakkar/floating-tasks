@@ -131,6 +131,7 @@
 		W10000000000000000000013 /* FloatingBrainWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FloatingBrainWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		W10000000000000000000014 /* FloatingBrainWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = FloatingBrainWidget.entitlements; sourceTree = "<group>"; };
 		W10000000000000000000015 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		F10000000000000000000001 /* Defaults.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Defaults.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -168,6 +169,7 @@
 		A10000000000000000000040 = {
 			isa = PBXGroup;
 			children = (
+				F10000000000000000000001 /* Defaults.xcconfig */,
 				A10000000000000000000041 /* FloatingBrain */,
 				E10000000000000000000010 /* ShareExtension */,
 				W10000000000000000000010 /* FloatingBrainWidget */,
@@ -510,7 +512,6 @@
 				CODE_SIGN_ENTITLEMENTS = FloatingBrain/FloatingBrain.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3GU3RWW5F7;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FloatingBrain/Info.plist;
@@ -536,7 +537,6 @@
 				CODE_SIGN_ENTITLEMENTS = FloatingBrain/FloatingBrain.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3GU3RWW5F7;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FloatingBrain/Info.plist;
@@ -562,7 +562,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.floatingbrain.tests;
@@ -581,7 +580,6 @@
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.floatingbrain.tests;
@@ -596,18 +594,18 @@
 		};
 		A100000000000000000000A4 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F10000000000000000000001 /* Defaults.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;
 		};
 		A100000000000000000000A5 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = F10000000000000000000001 /* Defaults.xcconfig */;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = "";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -619,7 +617,6 @@
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3GU3RWW5F7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -638,7 +635,6 @@
 				CODE_SIGN_ENTITLEMENTS = ShareExtension/ShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3GU3RWW5F7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -657,7 +653,6 @@
 				CODE_SIGN_ENTITLEMENTS = FloatingBrainWidget/FloatingBrainWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3GU3RWW5F7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FloatingBrainWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -677,7 +672,6 @@
 				CODE_SIGN_ENTITLEMENTS = FloatingBrainWidget/FloatingBrainWidget.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 3GU3RWW5F7;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = FloatingBrainWidget/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;

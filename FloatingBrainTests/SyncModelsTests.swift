@@ -21,12 +21,23 @@ final class SyncModelsTests: XCTestCase {
         )
 
         let data = try SyncPayloadEncoder().encode(request)
-        let json = String(decoding: data, as: UTF8.self)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let expected: [String: Any] = [
+            "completedItems": [],
+            "generatedAt": "1970-01-01T00:00:00Z",
+            "items": [[
+                "completed": false,
+                "createdAt": "1970-01-01T00:00:00Z",
+                "externalId": "apple-1",
+                "priority": 1,
+                "text": "Replace the bedroom air filter"
+            ]],
+            "listName": "Floating Brain",
+            "syncId": "00000000-0000-0000-0000-000000000001"
+        ]
 
-        XCTAssertEqual(
-            json,
-            "{\"completedItems\":[],\"generatedAt\":\"1970-01-01T00:00:00Z\",\"items\":[{\"completed\":false,\"createdAt\":\"1970-01-01T00:00:00Z\",\"dueAt\":null,\"externalId\":\"apple-1\",\"modifiedAt\":null,\"priority\":1,\"text\":\"Replace the bedroom air filter\"}],\"listName\":\"Floating Brain\",\"syncId\":\"00000000-0000-0000-0000-000000000001\"}"
-        )
+        // Optional dates are omitted; the backend accepts absent and null dates.
+        XCTAssertEqual(json as NSDictionary, expected as NSDictionary)
     }
 
     func testPayloadRoundTripsWithoutChangingReminderData() throws {

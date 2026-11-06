@@ -45,3 +45,51 @@ final class CognitoOAuthTests: XCTestCase {
         }
     }
 }
+
+final class FloatingBrainDeploymentConfigurationTests: XCTestCase {
+    private var configuredValues: [String: Any] {
+        [
+            "FLOATING_BRAIN_API_URL": "https://api.example.com",
+            "COGNITO_AUTHORIZATION_ENDPOINT": "https://auth.example.com/oauth2/authorize",
+            "COGNITO_TOKEN_ENDPOINT": "https://auth.example.com/oauth2/token",
+            "COGNITO_CLIENT_ID": "public-client"
+        ]
+    }
+
+    func testCleanCheckoutAndPartialSettingsDoNotConfigureCloudServices() {
+        XCTAssertNil(FloatingBrainDeploymentConfiguration(values: [:]))
+        for key in configuredValues.keys {
+            var values = configuredValues
+            values[key] = "  "
+            XCTAssertNil(FloatingBrainDeploymentConfiguration(values: values), key)
+            values[key] = "$(\(key))"
+            XCTAssertNil(FloatingBrainDeploymentConfiguration(values: values), key)
+        }
+    }
+
+    func testCompletePublicClientConfigurationIsLoaded() throws {
+        let deployment = try XCTUnwrap(FloatingBrainDeploymentConfiguration(values: configuredValues))
+        XCTAssertEqual(deployment.syncAPIBaseURL.absoluteString, "https://api.example.com")
+        XCTAssertEqual(deployment.cognitoConfiguration.clientID, "public-client")
+        XCTAssertEqual(deployment.cognitoConfiguration.redirectURI, "floatingbrain://oauth/callback")
+    }
+
+    func testUnsafeAndPlaceholderEndpointsAreRejected() {
+        for key in ["FLOATING_BRAIN_API_URL", "COGNITO_AUTHORIZATION_ENDPOINT", "COGNITO_TOKEN_ENDPOINT"] {
+            for endpoint in ["http://api.example.com", "https://user:password@api.example.com", "https://api.example.com?token=value", "https://api.example.com#fragment", "https://api.example.invalid", "not-a-url"] {
+                var values = configuredValues
+                values[key] = endpoint
+                XCTAssertNil(FloatingBrainDeploymentConfiguration(values: values), "\(key): \(endpoint)")
+            }
+        }
+    }
+
+    func testStageInAPIOriginAndMismatchedOAuthOriginsAreRejected() {
+        var values = configuredValues
+        values["FLOATING_BRAIN_API_URL"] = "https://api.example.com/v1"
+        XCTAssertNil(FloatingBrainDeploymentConfiguration(values: values))
+        values = configuredValues
+        values["COGNITO_TOKEN_ENDPOINT"] = "https://other.example.com/oauth2/token"
+        XCTAssertNil(FloatingBrainDeploymentConfiguration(values: values))
+    }
+}

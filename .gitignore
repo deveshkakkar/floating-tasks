@@ -1,3 +1,4 @@
+# Local builds and tool state
 .build/
 .build-*/
 DerivedData/
@@ -6,5 +7,29 @@ xcuserdata/
 .omx/
 .DS_Store
 .aws-sam/
-samconfig.toml
 __pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+node_modules/
+dist/
+*.log
+*.xcresult/
+
+# Credentials, cached sessions, and deployment-specific configuration
+.env
+.env.*
+!.env.example
+!.env.*.example
+.floating-brain-tokens.json
+refresh-token
+.refresh-token-*
+samconfig*.toml
+samconfig*.json
+Config/Local*.xcconfig
+*.pem
+*.key
+*.p8
+*.p12
+*.mobileprovision
+!Config/Local.xcconfig.example

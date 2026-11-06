@@ -1,145 +1,69 @@
 # Floating Brain
 
-Floating Brain is a native iOS app that syncs the active reminders in the `Floating Brain` Apple Reminders list to a private AWS-backed dashboard.
+Floating Brain is an experimental personal task dashboard. The iOS app syncs active reminders from an Apple Reminders list named **Floating Brain** to a backend you deploy in your own AWS account. The backend chooses a daily selection, which the app and widget display.
 
-## What it does
+The repository is named `floating-tasks`. It contains working app and backend code alongside prototypes and design specifications. It is not a hosted service, and a fresh checkout has no configured cloud deployment.
 
-- Signs in with Amazon Cognito using an iOS PKCE flow.
-- Reads the `Floating Brain` list from Apple Reminders.
-- Sends active reminders to an authenticated API Gateway endpoint.
-- Does not sync completed reminders.
-- Stores active reminders in DynamoDB with a 30-day TTL. The expiration is refreshed when an active task is synced.
-- Supports manual sync, Shortcuts sync, and scheduled background refresh attempts.
-- Accepts private brain dumps by text message through Photon webhooks.
-- Includes a diagnostics page opened with the ladybug icon in the dashboard.
-- Includes an archived-task view for inspecting deleted Apple Reminders records and restoring them.
+## What is implemented
 
-## Repository layout
+- An iOS 17+ SwiftUI app with Apple Reminders access, Cognito sign-in using PKCE, manual sync, Shortcuts integration, and opportunistic background refresh.
+- A share extension that queues captured text and a widget that displays cached daily tasks.
+- An AWS SAM backend with per-user task storage, daily selections, capture, completion, archive/restore endpoints, and an optional Photon webhook.
+- An optional TypeScript messaging companion and Python modules for a Raspberry Pi reader/cache.
 
-```text
-FloatingBrain/          iOS SwiftUI application
-FloatingBrainTests/     iOS unit tests
-sam/                    AWS SAM template and sync Lambda
-pi/                     Raspberry Pi read-only dashboard helpers
-scripts/                Deployment preflight checks
-project_spec.md         Product and implementation specification
-```
+The Pi modules are not a finished display application. Analytics, hardware provisioning, and other ideas in [project_spec.md](project_spec.md), [DISPLAY_SPEC.md](DISPLAY_SPEC.md), [ANALYTICS_SPEC.md](ANALYTICS_SPEC.md), and [DESIGN.md](DESIGN.md) are specifications; they are not promises that every described feature exists.
 
-## Requirements
+## Start with local checks
 
-- macOS with Xcode and an iOS 17+ SDK
-- AWS SAM CLI
-- An authenticated AWS CLI profile named `floating-brain` for deployment
-- An AWS account with Cognito, API Gateway, Lambda, and DynamoDB available
-
-## Build and test the iOS app
-
-Open `FloatingBrain.xcodeproj` in Xcode and run the `FloatingBrain` scheme on an iOS simulator or device.
-
-Command-line build:
+The cross-platform checks need Python 3.12+ and Node.js 22.13+ with npm. They use fixtures and do not require AWS, Apple, or Photon credentials.
 
 ```bash
-xcodebuild \
-  -project FloatingBrain.xcodeproj \
-  -scheme FloatingBrain \
-  -configuration Debug \
-  -sdk iphonesimulator \
-  -derivedDataPath .build-sim \
-  CODE_SIGNING_ALLOWED=NO \
-  build-for-testing
+git clone https://github.com/deveshkakkar/floating-tasks.git
+cd floating-tasks
+npm ci --prefix floating
+python3 scripts/check.py
 ```
 
-## Validate and deploy AWS
+For Python and configuration checks only, use `python3 scripts/check.py --python-only`. See [scripts/README.md](scripts/README.md) for the individual checks. GitHub Actions additionally validates the SAM template, scans for secrets, audits npm dependencies, and runs iOS tests on macOS.
 
-Run the local backend tests and validate the SAM template:
+## Run the iOS app
+
+Use Xcode on macOS with an iOS 17 or newer SDK. Open `FloatingBrain.xcodeproj` and select the **FloatingBrain** scheme. The app can build without cloud configuration; sign-in and sync become available after you configure your own backend.
+
+1. Follow [sam/README.md](sam/README.md) to deploy a development stack.
+2. Copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig`, which is ignored by Git.
+3. Set the API origin, Cognito authorization/token endpoints, and public app client ID from your stack outputs. Preserve the example's `https:/$()/` syntax: Xcode otherwise treats `//` as a comment. Do not append `/v1` to the API origin.
+4. For a device build, set your own `DEVELOPMENT_TEAM` and provision the app and both extensions. If changing identifiers, update the app, share extension, and widget bundle IDs; all three entitlements; and the App Group identifiers in `SharedCapture` and `SharedWidgetData` consistently.
+5. Create a Reminders list named **Floating Brain**, add a few synthetic tasks, sign in to your deployment, grant Reminders access, and sync.
+
+The native OAuth callback is `floatingbrain://oauth/callback`. Build settings are embedded in the app; they must never contain passwords, client secrets, or access tokens. Background refresh is scheduled by iOS and is not a guaranteed delivery mechanism.
+
+A simulator build check is available without signing:
 
 ```bash
-python3 -m unittest discover -s sam/tests -v
-sam validate --template-file sam/template.yaml --lint
+xcodebuild -project FloatingBrain.xcodeproj -scheme FloatingBrain \
+  -configuration Debug -sdk iphonesimulator -derivedDataPath .build-sim \
+  CODE_SIGNING_ALLOWED=NO build-for-testing
 ```
 
-Deploy the development stack with the existing Cognito domain prefix:
+## Components
 
-```bash
-sam deploy \
-  --template-file sam/template.yaml \
-  --stack-name floating-brain-dev \
-  --parameter-overrides CognitoDomainPrefix=floating-brain-dev \
-  --region us-east-1 \
-  --profile floating-brain \
-  --capabilities CAPABILITY_IAM \
-  --resolve-s3 \
-  --no-confirm-changeset \
-  --no-fail-on-empty-changeset
-```
+| Directory | Purpose | Setup |
+| --- | --- | --- |
+| `FloatingBrain/`, `ShareExtension/`, `FloatingBrainWidget/` | iOS app and extensions | Instructions above |
+| `sam/` | AWS infrastructure and Python API | [Backend guide](sam/README.md) |
+| `floating/` | Optional Spectrum/Photon messaging companion | [Companion guide](floating/README.md) |
+| `pi/` | Read-only DynamoDB adapter and SQLite cache | [Pi guide](pi/README.md) |
+| `scripts/` | Local checks and deployment preflight | [Script guide](scripts/README.md) |
 
-The first deployment leaves the daily scheduler disabled until the Cognito user exists. After creating the user, retrieve its Cognito `sub` and redeploy with:
+## Privacy, security, and release status
 
-```bash
-sam deploy \
-  --template-file sam/template.yaml \
-  --stack-name floating-brain-dev \
-  --parameter-overrides \
-    CognitoDomainPrefix=floating-brain-dev \
-    DailySelectionUserId=<cognito-user-sub> \
-  --region us-east-1 \
-  --profile floating-brain \
-  --capabilities CAPABILITY_IAM \
-  --resolve-s3 \
-  --no-confirm-changeset \
-  --no-fail-on-empty-changeset
-```
+Task text leaves the device when you sync or capture to the cloud. Sync also sends completion events, including completed reminder text, for history. Widgets, notification previews, local caches, and optional messaging integrations can expose that text on other surfaces. DynamoDB expiry is asynchronous, and the archive bucket is retained without an expiry policy by default. See [SECURITY.md](SECURITY.md) for data handling, retention, and private reporting guidance.
 
-You can test selection immediately through `GET /v1/reminders/daily`; you do not need to wait for the 6:00 AM scheduler run.
+Before publishing or distributing a deployment, work through the [public release checklist](docs/public-release.md).
 
-The deployed stack exposes the API and Cognito outputs. Keep account-specific configuration and credentials out of source control.
+Development guidance is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Text brain dumps with Photon
+## License
 
-Photon sends signed inbound messages to the public `POST /v1/photon/webhook` route. The Lambda verifies the signature and timestamp, accepts only the configured sender, deduplicates Photon message IDs, and stores text as an active `PHOTON` item. Attachments and other message types are ignored.
-
-After the stack is deployed, register the webhook in Photon using the project ID and secret from your Photon account:
-
-```bash
-curl --request POST \
-  --url https://spectrum.photon.codes/projects/<photon-project-id>/webhooks/ \
-  --user '<photon-project-id>:<photon-project-secret>' \
-  --header 'Content-Type: application/json' \
-  --data '{"webhookUrl":"https://<api-id>.execute-api.<region>.amazonaws.com/v1/photon/webhook"}'
-```
-
-Save the returned `signingSecret`; Photon returns it only when the webhook is created. Redeploy with `PhotonUserId` set to the Cognito user `sub`, `PhotonAllowedSender` set to your exact Photon sender ID (normally your E.164 phone number), and `PhotonWebhookSigningSecret` set to that secret. Keep all three values out of source control. The Photon endpoint is intentionally unauthenticated at API Gateway because Photon authenticates it with its signed webhook headers.
-
-## Release checklist
-
-Before TestFlight or production deployment:
-
-1. Deploy the SAM stack with a production stack name, unique Cognito domain prefix, and the intended `DailySelectionUserId`.
-2. Copy the generated Cognito and API outputs into the app’s release configuration; do not commit user-specific values or tokens.
-3. Confirm the App ID, widget and Share Extension bundle IDs, App Group, URL scheme, and push/background capabilities in the Apple Developer account.
-4. Archive with a real signing team and verify the app, widget, and Share Extension are all embedded in the archive.
-5. Run the physical-device smoke test after signing the archive: sign-in, sync, capture, restore, Siri, Share Extension, widget refresh, and notification delivery.
-6. Verify the production Lambda logs, DynamoDB TTL, Cognito user creation, and scheduled daily-selection invocation.
-
-The archived-task endpoints are `GET /v1/reminders/archived` and `POST /v1/reminders/restore` with `{ "externalId": "..." }`. Restore is intentionally limited to records sourced from Apple Reminders; Share Extension and Siri captures are never soft-deleted by sync.
-
-## Debugging
-
-Open the dashboard’s ladybug icon to inspect:
-
-- authentication and Reminders permission state;
-- last sync result and errors;
-- background refresh scheduling state;
-- API and Cognito configuration;
-- a redacted diagnostics report that can be copied to the clipboard.
-
-The diagnostics page intentionally excludes access tokens and reminder contents.
-
-## Data retention
-
-The Lambda filters completed items before writing. Active records receive an `expiresAt` Unix timestamp 30 days in the future, and DynamoDB TTL is enabled for that attribute. TTL deletion is asynchronous, so expiration is not an exact deletion deadline.
-
-When an Apple Reminder is confirmed deleted after the three-sync grace period, its soft-deleted row receives a 24-hour TTL from the deletion transition.
-Daily selection rows receive a two-day TTL from their creation timestamp.
-
-Reminders confirmed deleted after the three-sync grace period are archived as encrypted, versioned JSON in the S3 history bucket before their DynamoDB row receives its 24-hour TTL. Daily selections and completion events are archived in the same event history for effectiveness analysis; see `ANALYTICS_SPEC.md`.
+Floating Brain is licensed under the [MIT License](LICENSE). Third-party material retains its own licenses and notices, as described in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
