@@ -4,6 +4,7 @@ import hmac
 import json
 import os
 import random
+import re
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from urllib.parse import quote
@@ -21,6 +22,7 @@ MAX_ITEMS = 500
 MAX_CAPTURE_ITEMS = 50
 MAX_ACTIVE_PAGE_SIZE = 50
 MAX_TITLE_LENGTH = 500
+MAX_IDENTIFIER_BYTES = 900
 MAX_BODY_BYTES = 512 * 1024
 ACTIVE_TTL_SECONDS = 30 * 24 * 60 * 60
 DELETED_TTL_SECONDS = 24 * 60 * 60
@@ -57,6 +59,69 @@ def epoch_seconds(instant):
 def user_id_from_event(event):
     claims = event.get("requestContext", {}).get("authorizer", {}).get("jwt", {}).get("claims", {})
     return claims.get("sub")
+
+
+def request_body_bytes(event):
+    raw_body = event.get("body")
+    if raw_body is None:
+        raw_body = ""
+    if not isinstance(raw_body, str):
+        raise ValueError("request body must be a string")
+    if event.get("isBase64Encoded"):
+        if len(raw_body) > 4 * ((MAX_BODY_BYTES + 2) // 3):
+            raise ValueError("request body is too large")
+        body = base64.b64decode(raw_body, validate=True)
+    else:
+        body = raw_body.encode("utf-8")
+    if len(body) > MAX_BODY_BYTES:
+        raise ValueError("request body is too large")
+    return body
+
+
+def parse_json_object(event):
+    def reject_constant(_value):
+        raise ValueError("non-finite JSON number")
+
+    try:
+        payload = json.loads(request_body_bytes(event).decode("utf-8"), parse_constant=reject_constant)
+    except RecursionError as error:
+        raise ValueError("request body is too deeply nested") from error
+    if not isinstance(payload, dict):
+        raise ValueError("request body must be an object")
+    return payload
+
+
+def validate_identifier(value):
+    # Reserve space for the longest reminder-key prefix within DynamoDB's key limit.
+    if not isinstance(value, str) or not value.strip() or len(value.encode("utf-8")) > MAX_IDENTIFIER_BYTES:
+        raise ValueError("invalid identifier")
+
+
+def validate_timestamp(value, required=False):
+    if value is None and not required:
+        return
+    if not isinstance(value, str) or not re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})", value
+    ):
+        raise ValueError("invalid timestamp")
+    datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def validate_reminder_fields(item):
+    if not isinstance(item, dict):
+        raise ValueError("invalid reminder")
+    validate_identifier(item.get("externalId"))
+    text = item.get("text")
+    if not isinstance(text, str) or not text.strip() or len(text) > MAX_TITLE_LENGTH:
+        raise ValueError("invalid reminder text")
+    text.encode("utf-8")
+    if not isinstance(item.get("completed"), bool):
+        raise ValueError("invalid completion state")
+    priority = item.get("priority", 0)
+    if type(priority) is not int or not 0 <= priority <= 9:
+        raise ValueError("invalid priority")
+    for field in ("createdAt", "modifiedAt", "dueAt"):
+        validate_timestamp(item.get(field))
 
 
 def active_reminder_items(records):
@@ -254,13 +319,14 @@ def active_handler(event, _context):
     except (TypeError, ValueError):
         return response(400, {"error": "invalid_limit"})
 
+    raw_cursor = query_parameters.get("cursor")
+    cursor = decode_cursor(raw_cursor)
+    if raw_cursor is not None and (cursor is None or cursor.get("PK") != partition_key):
+        return response(400, {"error": "invalid_cursor"})
     query = {
         "KeyConditionExpression": Key("PK").eq(partition_key) & Key("SK").begins_with("REMINDER#"),
         "Limit": limit,
     }
-    cursor = decode_cursor(query_parameters.get("cursor"))
-    if query_parameters.get("cursor") and (cursor is None or cursor.get("PK") != partition_key):
-        return response(400, {"error": "invalid_cursor"})
     if cursor:
         query["ExclusiveStartKey"] = cursor
 
@@ -286,10 +352,9 @@ def restore_handler(event, _context):
     if not user_id:
         return response(401, {"error": "unauthorized"})
     try:
-        payload = json.loads(event.get("body") or "{}")
+        payload = parse_json_object(event)
         external_id = payload.get("externalId")
-        if not isinstance(external_id, str) or not external_id.strip():
-            raise ValueError("externalId is required")
+        validate_identifier(external_id)
     except (ValueError, json.JSONDecodeError, TypeError):
         return response(400, {"error": "invalid_request"})
 
@@ -318,15 +383,21 @@ def encode_cursor(key):
 
 
 def decode_cursor(cursor):
-    if not cursor:
+    if not isinstance(cursor, str) or not cursor or len(cursor) > 4096:
         return None
     try:
         padded = cursor + "=" * (-len(cursor) % 4)
-        value = json.loads(base64.urlsafe_b64decode(padded).decode("utf-8"))
-        if not isinstance(value, dict) or not isinstance(value.get("PK"), str) or not isinstance(value.get("SK"), str):
+        value = json.loads(base64.b64decode(padded, altchars=b"-_", validate=True).decode("utf-8"))
+        if not isinstance(value, dict) or set(value) != {"PK", "SK"}:
+            return None
+        if not isinstance(value["PK"], str) or not isinstance(value["SK"], str):
+            return None
+        if not value["PK"].startswith("USER#") or not value["SK"].startswith("REMINDER#"):
+            return None
+        if len(value["PK"].encode("utf-8")) > 2048 or len(value["SK"].encode("utf-8")) > 1024:
             return None
         return {"PK": value["PK"], "SK": value["SK"]}
-    except (ValueError, TypeError, UnicodeDecodeError):
+    except (ValueError, TypeError, UnicodeDecodeError, RecursionError):
         return None
 
 
@@ -336,22 +407,21 @@ def capture_handler(event, _context):
         return response(401, {"error": "unauthorized"})
 
     try:
-        raw_body = event.get("body") or "{}"
-        if event.get("isBase64Encoded"):
-            raw_body = base64.b64decode(raw_body).decode("utf-8")
-        payload = json.loads(raw_body)
+        payload = parse_json_object(event)
         items = payload.get("items")
         if not isinstance(items, list) or not items or len(items) > MAX_CAPTURE_ITEMS:
             raise ValueError("invalid capture count")
         for item in items:
-            if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+            if not isinstance(item, dict):
                 raise ValueError("invalid capture")
-            if not item["id"] or not isinstance(item.get("text"), str) or not item["text"].strip():
+            validate_identifier(item.get("id"))
+            validate_identifier(item["id"].replace("-", ""))
+            if not isinstance(item.get("text"), str) or not item["text"].strip():
                 raise ValueError("invalid capture text")
             if len(item["text"]) > MAX_TITLE_LENGTH:
                 raise ValueError("capture text is too long")
-            if not isinstance(item.get("capturedAt"), str) or not item["capturedAt"]:
-                raise ValueError("capture timestamp is required")
+            item["text"].encode("utf-8")
+            validate_timestamp(item.get("capturedAt"), required=True)
     except (ValueError, json.JSONDecodeError, UnicodeDecodeError):
         return response(400, {"error": "invalid_request"})
 
@@ -439,10 +509,9 @@ def complete_handler(event, _context):
     if not user_id:
         return response(401, {"error": "unauthorized"})
     try:
-        payload = json.loads(event.get("body") or "{}")
+        payload = parse_json_object(event)
         external_id = payload.get("externalId")
-        if not isinstance(external_id, str) or not external_id.strip():
-            raise ValueError("externalId is required")
+        validate_identifier(external_id)
     except (ValueError, json.JSONDecodeError, TypeError):
         return response(400, {"error": "invalid_request"})
 
@@ -469,7 +538,9 @@ def complete_handler(event, _context):
 
 
 def verify_photon_signature(raw_body, timestamp, signature, secret, now=None):
-    if not timestamp or not signature or not secret:
+    if not isinstance(timestamp, str) or not re.fullmatch(r"[0-9]{1,12}", timestamp):
+        return False
+    if not isinstance(signature, str) or not re.fullmatch(r"v0=[0-9a-f]{64}", signature) or not secret:
         return False
     try:
         timestamp_value = int(timestamp)
@@ -487,10 +558,9 @@ def verify_photon_signature(raw_body, timestamp, signature, secret, now=None):
 
 
 def photon_webhook_handler(event, _context):
-    raw_body = event.get("body") or ""
     try:
-        raw_body = base64.b64decode(raw_body) if event.get("isBase64Encoded") else raw_body.encode("utf-8")
-    except (ValueError, UnicodeEncodeError):
+        raw_body = request_body_bytes(event)
+    except ValueError:
         return response(400, {"error": "invalid_request"})
 
     if not verify_photon_signature(
@@ -511,9 +581,9 @@ def photon_webhook_handler(event, _context):
         text = content.get("text")
         if payload.get("event") != "messages":
             return response(200, {"ignored": True})
-        if not isinstance(message_id, str) or not message_id.strip():
-            raise ValueError("message id is required")
-        if sender_id != os.environ.get("PHOTON_ALLOWED_SENDER", ""):
+        validate_identifier(message_id)
+        allowed_sender = os.environ.get("PHOTON_ALLOWED_SENDER", "")
+        if not allowed_sender or sender_id != allowed_sender:
             return response(403, {"error": "sender_not_allowed"})
         if content.get("type") != "text" or not isinstance(text, str) or not text.strip():
             return response(200, {"ignored": True})
@@ -521,10 +591,12 @@ def photon_webhook_handler(event, _context):
             return response(200, {"ignored": True})
         if len(text) > MAX_TITLE_LENGTH:
             return response(400, {"error": "text_too_long"})
+        text.encode("utf-8")
+        validate_timestamp(message.get("timestamp"))
         user_id = os.environ.get("PHOTON_USER_ID", "")
         if not user_id:
             return response(503, {"error": "photon_user_not_configured"})
-    except (AttributeError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError):
+    except (AttributeError, TypeError, ValueError, json.JSONDecodeError, UnicodeDecodeError, RecursionError):
         return response(400, {"error": "invalid_request"})
 
     key = {"PK": f"USER#{user_id}", "SK": f"REMINDER#capture:photon:{message_id}"}
@@ -552,41 +624,23 @@ def photon_webhook_handler(event, _context):
 
 
 def parse_request(event):
-    raw_body = event.get("body") or "{}"
-    if event.get("isBase64Encoded"):
-        raw_body = base64.b64decode(raw_body).decode("utf-8")
-    if len(raw_body.encode("utf-8")) > MAX_BODY_BYTES:
-        raise ValueError("request body is too large")
-    payload = json.loads(raw_body)
+    payload = parse_json_object(event)
     items = payload.get("items")
-    if not isinstance(payload.get("syncId"), str) or not payload["syncId"]:
-        raise ValueError("syncId is required")
+    validate_identifier(payload.get("syncId"))
     if not isinstance(payload.get("listName"), str) or payload["listName"] != "Floating Brain":
         raise ValueError("invalid listName")
     if not isinstance(items, list) or len(items) > MAX_ITEMS:
         raise ValueError("invalid item count")
     for item in items:
-        if not isinstance(item, dict) or not isinstance(item.get("externalId"), str):
-            raise ValueError("invalid reminder")
-        if not item["externalId"] or not isinstance(item.get("text"), str) or not item["text"].strip():
-            raise ValueError("invalid reminder text")
-        if len(item["text"]) > MAX_TITLE_LENGTH:
-            raise ValueError("reminder text is too long")
-        if not isinstance(item.get("completed"), bool):
-            raise ValueError("invalid completion state")
+        validate_reminder_fields(item)
     payload["items"] = [item for item in items if not item["completed"]]
     completed_items = payload.get("completedItems", [])
     if not isinstance(completed_items, list) or len(completed_items) > MAX_ITEMS:
         raise ValueError("invalid completed item count")
     for item in completed_items:
-        if not isinstance(item, dict) or not isinstance(item.get("externalId"), str):
-            raise ValueError("invalid completed reminder")
-        if not item["externalId"] or not isinstance(item.get("text"), str) or not item["text"].strip():
-            raise ValueError("invalid completed reminder text")
-        if not isinstance(item.get("completed"), bool) or not item["completed"]:
+        validate_reminder_fields(item)
+        if not item["completed"]:
             raise ValueError("invalid completed reminder state")
-        if len(item["text"]) > MAX_TITLE_LENGTH:
-            raise ValueError("completed reminder text is too long")
     payload["completedItems"] = completed_items
     return payload
 

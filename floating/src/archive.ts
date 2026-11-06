@@ -16,6 +16,8 @@ export async function fetchArchivedTasks(): Promise<ArchivedTask[] | string> {
   try {
     const endpoint = new URL("v1/reminders/archived", `${apiURL.replace(/\/$/, "")}/`);
     const response = await fetch(endpoint, {
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 

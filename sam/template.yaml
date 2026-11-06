@@ -71,6 +71,8 @@ Resources:
     Type: AWS::Cognito::UserPool
     Properties:
       UserPoolName: !Sub floating-brain-${AWS::StackName}
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: true
       AutoVerifiedAttributes:
         - email
       UsernameAttributes:
@@ -165,7 +167,7 @@ Resources:
             - Effect: Allow
               Action:
                 - s3:PutObject
-              Resource: !Sub ${FloatingBrainHistoryBucket.Arn}/users/*/deleted/*
+              Resource: !Sub ${FloatingBrainHistoryBucket.Arn}/users/*/events/*
       Events:
         Sync:
           Type: HttpApi

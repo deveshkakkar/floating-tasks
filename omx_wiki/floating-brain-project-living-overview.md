@@ -12,6 +12,11 @@ schemaVersion: 1
 
 # Floating Brain Project Living Overview
 
+> Historical development notes. For current setup, configuration, limitations,
+> and verification commands, start with [README.md](../README.md) and
+> [CONTRIBUTING.md](../CONTRIBUTING.md). Test counts and deployment observations
+> below describe earlier work, not the current release status.
+
 # Floating Brain — Living Project Overview
 
 Last updated: 2026-08-09
@@ -325,13 +330,12 @@ Unknown messages still echo while additional intents are added. Command messages
 
 ## Authentication
 
-The bridge uses Cognito Authorization Code + PKCE. Run `npm run login` once from `floating/`; the refresh token is stored in macOS Keychain and short-lived access tokens are refreshed automatically. The Cognito client accepts the localhost callback `http://127.0.0.1:8765/callback`. Public API and Cognito configuration has code defaults with environment overrides; access tokens should not be stored in `.env`.
+The bridge uses Cognito Authorization Code + PKCE. Run `npm run login` once from `floating/`; see [the companion setup](../floating/README.md) for current token-storage behavior. The Cognito client accepts the localhost callback `http://127.0.0.1:8765/callback`. Each deployment supplies its own API and Cognito configuration; access tokens should not be stored in `.env`.
 
 ## Backend
 
-The deployed development stack is `floating-brain-dev` in `us-east-1`.
-
-API base: `https://xv5xsshic3.execute-api.us-east-1.amazonaws.com`
+Use the API origin returned by your own SAM stack. Deployment-specific endpoints
+are intentionally omitted from these notes.
 
 Authenticated routes include active, daily, archived, restore, capture, sync, and completion. Completion marks cloud-created tasks complete; Apple Reminders tasks must be completed in Apple Reminders so the source of truth remains consistent. Restore is limited to deleted Apple Reminders records.
 

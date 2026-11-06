@@ -17,6 +17,8 @@ export async function fetchActiveTasks(): Promise<ActiveTask[] | string> {
     const endpoint = new URL("v1/reminders/active", `${apiURL.replace(/\/$/, "")}/`);
     endpoint.searchParams.set("limit", "25");
     const response = await fetch(endpoint, {
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
       headers: { Authorization: `Bearer ${accessToken}` },
     });
 

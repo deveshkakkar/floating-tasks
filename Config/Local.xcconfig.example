@@ -1,0 +1,13 @@
+// Copy to Local.xcconfig and replace these placeholders with your stack outputs.
+// Xcode treats // as a comment. Use /$()/ in URLs to preserve both slashes.
+// API origin only: do not append /v1. The app adds the route prefix.
+FLOATING_BRAIN_API_URL = https:/$()/api.example.invalid
+COGNITO_AUTHORIZATION_ENDPOINT = https:/$()/auth.example.invalid/oauth2/authorize
+COGNITO_TOKEN_ENDPOINT = https:/$()/auth.example.invalid/oauth2/token
+COGNITO_CLIENT_ID = your-public-cognito-client-id
+
+// Set your own Apple team for device/archive builds; leave empty for CI.
+DEVELOPMENT_TEAM =
+
+// These settings are embedded in the app. Never put client secrets, passwords,
+// access tokens, or signing keys in an xcconfig, even an ignored one.

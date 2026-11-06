@@ -20,6 +20,8 @@ export async function restoreArchivedTask(target: string): Promise<string> {
   try {
     const endpoint = new URL("v1/reminders/restore", `${apiURL.replace(/\/$/, "")}/`);
     const response = await fetch(endpoint, {
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,

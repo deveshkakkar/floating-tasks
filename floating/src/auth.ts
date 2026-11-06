@@ -1,8 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { chmod, mkdir, open, readFile, rename } from "node:fs/promises";
+import { chmod, mkdir, open, readFile, rename, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { execFileSync } from "node:child_process";
-import { COGNITO_CLIENT_ID, COGNITO_TOKEN_ENDPOINT } from "./config.ts";
+import { COGNITO_CLIENT_ID, COGNITO_TOKEN_ENDPOINT, validateOAuthConfiguration } from "./config.ts";
 
 const KEYCHAIN_SERVICE = "floating-brain-spectrum";
 const KEYCHAIN_ACCOUNT = "refresh-token";
@@ -45,20 +45,25 @@ export async function saveRefreshToken(token: string): Promise<void> {
   const path = process.env.COGNITO_REFRESH_TOKEN_FILE ?? DEFAULT_LINUX_TOKEN_FILE;
   const directory = dirname(path);
   await mkdir(directory, { recursive: true, mode: 0o700 });
-  await chmod(directory, 0o700);
+  // Do not chmod an existing parent: an explicitly configured path can use a shared mount.
   const temporaryPath = join(directory, `.refresh-token-${randomBytes(12).toString("hex")}`);
-  const handle = await open(temporaryPath, "wx", 0o600);
   try {
-    await handle.writeFile(`${token}\n`, "utf8");
-    await handle.sync();
+    const handle = await open(temporaryPath, "wx", 0o600);
+    try {
+      await handle.writeFile(`${token}\n`, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temporaryPath, path);
+    await chmod(path, 0o600);
   } finally {
-    await handle.close();
+    await unlink(temporaryPath).catch(() => {});
   }
-  await rename(temporaryPath, path);
-  await chmod(path, 0o600);
 }
 
 export async function getAccessToken(): Promise<string | null> {
+  try { validateOAuthConfiguration(); } catch { return null; }
   const refreshToken = process.platform === "darwin"
     ? readMacRefreshToken()
     : process.platform === "linux" ? await readLinuxRefreshToken() : null;
@@ -67,6 +72,7 @@ export async function getAccessToken(): Promise<string | null> {
   try {
     const response = await fetch(COGNITO_TOKEN_ENDPOINT, {
       method: "POST",
+      redirect: "error",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
         grant_type: "refresh_token",
@@ -77,10 +83,10 @@ export async function getAccessToken(): Promise<string | null> {
     });
     if (!response.ok) return null;
     const payload = (await response.json()) as { access_token?: string };
-    return payload.access_token ?? null;
+    return typeof payload.access_token === "string" && payload.access_token ? payload.access_token : null;
   } catch {
     return null;
   }
 }
 
-export const LOGIN_REQUIRED = "Run the documented Cognito login flow on the home server before querying tasks.";
+export const LOGIN_REQUIRED = "Configure Cognito and run npm run login on the machine running the bridge before querying tasks.";
